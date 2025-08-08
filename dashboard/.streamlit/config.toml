@@ -1,0 +1,16 @@
+# .streamlit/config.toml
+[theme]
+# Couleurs principales de l'interface (boutons, widgets, etc.)
+primaryColor="#D90429" # ROUGE ARTEX
+
+# Couleur de fond principale de l'application
+backgroundColor="#FFFFFF" # BLANC ARTEX
+
+# Couleur de fond pour les éléments secondaires (ex: la barre latérale)
+secondaryBackgroundColor="#F0F2F6" # GRIS ARTEX
+
+# Couleur du texte principal
+textColor="#4F4F4F" # GRIS TEXTE ARTEX
+
+# Police de caractères
+font="sans serif"
