@@ -27,6 +27,14 @@ Ce projet nécessite une base de données MySQL pour fonctionner.
     ```
     *Note : Assurez-vous que les informations d'identification de l'utilisateur correspondent à celles que vous configurerez dans les fichiers `.env` et `secrets.toml`.*
 
+3.  **Appliquez le schéma de la base de données :**
+    *   Le projet a subi une refonte majeure de la base de données. Pour appliquer le nouveau schéma et migrer les anciennes données (si elles existent), vous devez exécuter le script de migration.
+    *   Connectez-vous à votre serveur MySQL et exécutez le script `migration.sql` qui se trouve dans le répertoire `backend`.
+    *   Exemple de commande :
+        ```bash
+        mysql -u root1 -p extranet < backend/migration.sql
+        ```
+
 ### Configuration des Services Externes
 
 #### Intégration Google Calendar (pour la planification de rappels)
@@ -70,25 +78,19 @@ L'outil `schedule_callback` nécessite une intégration avec Google Calendar.
     cd backend
     ```
 
-2.  **Créez un environnement virtuel Python (recommandé) :**
-    ```bash
-    python -m venv venv
-    source venv/bin/activate  # Sous Windows, utilisez `venv\Scripts\activate`
-    ```
-
-3.  **Installez les dépendances :**
+2.  **Installez les dépendances :**
     ```bash
     pip install -r requirements.txt
     ```
 
-4.  **Configurez les variables d'environnement :**
+3.  **Configurez les variables d'environnement :**
     *   Le fichier `.env.example` sert de modèle. Copiez-le vers un nouveau fichier nommé `.env` :
         ```bash
         cp .env.example .env
         ```
     *   Modifiez le fichier `.env` pour y ajouter vos propres clés API et autres secrets.
 
-5.  **Lancez le serveur backend :**
+4.  **Lancez le serveur backend :**
     ```bash
     python server.py
     ```
@@ -101,18 +103,12 @@ L'outil `schedule_callback` nécessite une intégration avec Google Calendar.
     cd dashboard
     ```
 
-2.  **Créez un environnement virtuel Python (recommandé) :**
-    ```bash
-    python -m venv venv
-    source venv/bin/activate  # Sous Windows, utilisez `venv\Scripts\activate`
-    ```
-
-3.  **Installez les dépendances :**
+2.  **Installez les dépendances :**
     ```bash
     pip install -r requirements.txt
     ```
 
-4.  **Configurez les secrets :**
+3.  **Configurez les secrets :**
     *   Le fichier `secrets.toml.example` sert de modèle. Copiez-le vers un nouveau fichier nommé `secrets.toml` dans le répertoire `.streamlit` :
         ```bash
         cp dashboard/.streamlit/secrets.toml.example dashboard/.streamlit/secrets.toml
@@ -120,71 +116,8 @@ L'outil `schedule_callback` nécessite une intégration avec Google Calendar.
     *   Modifiez le fichier `secrets.toml` pour y ajouter vos identifiants de base de données.
 
 
-5.  **Lancez le dashboard :**
+4.  **Lancez le dashboard :**
     ```bash
     streamlit run app.py
     ```
     Le dashboard devrait maintenant être accessible dans votre navigateur, généralement à `http://localhost:8501`.
-
-### 3. Utilisation de l'Application
-
-*   Assurez-vous que le serveur backend et le dashboard sont tous deux en cours d'exécution.
-*   L'agent vocal est accessible via des appels SIP, gérés par le backend.
-*   Le dashboard de supervision est accessible via l'URL fournie par Streamlit.
-
-### 4. Dashboard de Supervision de l'Agent
-
-Ce projet inclut un tableau de bord de supervision pour analyser les performances et les activités de l'agent IA. Le backend collecte des données détaillées et expose des APIs pour alimenter ce tableau de bord. Le frontend fournit une interface utilisateur pour visualiser ces données.
-
-**Accès au Tableau de Bord:**
-
-*   Une fois le backend et le dashboard démarrés, accédez au tableau de bord en naviguant vers l'URL du dashboard (par exemple, `http://localhost:8501`).
-
-**Fonctionnalités du Tableau de Bord:**
-
-Le tableau de bord offre plusieurs sections pour une analyse complète :
-
-*   **Aperçu (KPIs) :**
-    *   Indicateurs clés de performance agrégés : Nombre total d'appels, durée moyenne, nombre d'erreurs critiques, taux de confirmation d'identité, etc.
-    *   Visualisation de l'utilisation des outils principaux par l'agent.
-*   **Historique des Appels :**
-    *   Liste paginée et filtrable de tous les appels enregistrés (par date, ID adhérent, numéro appelant).
-    *   Informations de base pour chaque appel et accès aux détails.
-*   **Vue Détaillée d'un Appel (Modale) :**
-    *   Accessible depuis l'historique des appels.
-    *   **Informations Générales:** Métadonnées de l'appel (ID, timestamps, durée, appelant, adhérent identifié).
-    *   **Résumé de l'Appel:** Description narrative de l'appel (si généré par l'agent).
-    *   **Évaluation de Performance:** Notes sur l'adhérence aux instructions et la résolution de l'appel (basées sur des heuristiques backend).
-    *   **Chronologie des Actions de l'Agent:** Liste détaillée des outils appelés (avec paramètres et résultats) et des messages importants envoyés par l'agent.
-    *   **Résumé des Actions sur la Base de Données:** Liste à puces des interactions clés avec la base de données (consultations, modifications) liées à l'appel.
-    *   **Tableau des Interactions BD Détaillées:** Vue tabulaire complète de toutes les interactions avec la base de données pendant l'appel.
-    *   **Erreurs Pendant l'Appel:** Liste des erreurs système survenues spécifiquement durant cet appel.
-*   **Journal des Erreurs Système :**
-    *   Liste paginée et filtrable de toutes les erreurs critiques survenues dans le backend, avec détails (source, message, trace, contexte).
-*   **Journal des Interactions Base de Données :**
-    *   Liste paginée et filtrable de toutes les opérations de base de données initiées par le système, avec détails (type, table, description).
-
-**Collecte de Données Backend:**
-
-*   Les données sont stockées dans une base de données MySQL. Les tables suivantes ont été ajoutées pour le tableau de bord :
-    *   `journal_appels`: Métadonnées des appels, résumés, évaluations.
-    *   `actions_agent`: Actions spécifiques de l'agent (appels d'outils, messages).
-    *   `interactions_bd`: Opérations sur la base de données.
-    *   `erreurs_systeme`: Erreurs système.
-*   La journalisation est intégrée dans les modules backend (`agent.py`, `tools.py`, `db_driver.py`).
-*   Une logique d'évaluation de performance post-appel (`performance_eval.py`) enrichit les données de `journal_appels`.
-*   Les APIs pour le tableau de bord sont définies dans `dashboard_api.py`.
-
-### 5. Considérations de Sécurité (Important)
-
-*   **Protection des APIs du Tableau de Bord :** Les points de terminaison de l'API du tableau de bord (`/api/dashboard/*`) sont actuellement **non protégés**. Dans un environnement de production ou partagé, il est **essentiel** de mettre en place une authentification et une autorisation robustes pour contrôler l'accès à ces données potentiellement sensibles.
-*   **Principe du Moindre Privilège (Base de Données) :** Le compte utilisateur de la base de données utilisé par l'application backend doit avoir uniquement les permissions minimales nécessaires sur les tables (par exemple, `SELECT` sur les tables de données principales, `INSERT/UPDATE/SELECT` sur les tables de journalisation).
-*   **Journalisation de Données Sensibles :** Bien que l'objectif soit de journaliser les actions et non les données brutes sensibles, une attention particulière doit être portée aux paramètres des outils (`actions_agent.parametres_outil`) et aux descriptions d'actions BD (`interactions_bd.description_action`) pour éviter la journalisation involontaire d'informations confidentielles non nécessaires à l'audit. Un masquage ou une omission sélective pourrait être requis.
-*   **HTTPS :** Pour tout déploiement, assurez-vous que toutes les communications entre le client, le serveur frontend et le serveur backend sont chiffrées via HTTPS.
-
-### 6. Robustesse et Améliorations Futures
-
-*   **Gestion des Erreurs :** Le système intègre une journalisation des erreurs. Une surveillance active de ces journaux est recommandée.
-*   **Scalabilité de la Journalisation :** Pour des environnements à très haute charge, la journalisation directe en base de données pourrait devenir un goulot d'étranglement. Des mécanismes de journalisation asynchrone ou des services de journalisation dédiés pourraient être envisagés.
-*   **Tests :** Un plan de test conceptuel a été défini. L'exécution rigoureuse de tests unitaires, d'intégration et de bout en bout est cruciale avant toute utilisation en production.
-*   **Évaluation de Performance de l'Agent :** La logique actuelle est basée sur des heuristiques. Elle peut être significativement améliorée et affinée avec des analyses plus poussées ou même des évaluations assistées par LLM.

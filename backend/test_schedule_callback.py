@@ -3,6 +3,7 @@ from dotenv import load_dotenv
 import os
 from tools import schedule_callback
 from livekit.agents import RunContext
+from db_driver import Client # Import the new Client model
 
 async def main():
     # Load environment variables from .env file
@@ -14,22 +15,22 @@ async def main():
         print("Please create a service account, share your calendar with it, and update the .env file.")
         return
 
-    # Create a mock RunContext
+    # Create a mock RunContext and add a mock client
     context = RunContext()
+    mock_client = Client(Id=999, FirstName="Test", LastName="User", Email="test@example.com")
+    context.userdata["client_context"] = mock_client
 
     # --- Call the tool with test data ---
-    customer_id = "TEST-12345"
     # Schedule for 2 minutes from now
     from datetime import datetime, timedelta
     schedule_time = datetime.now() + timedelta(minutes=2)
     datetime_str = schedule_time.isoformat()
-    reason = "Test callback scheduled by test script"
+    reason = "Test callback scheduled by refactored test script"
 
-    print(f"Attempting to schedule callback for customer '{customer_id}' at {datetime_str}...")
+    print(f"Attempting to schedule callback for client '{mock_client.FirstName} {mock_client.LastName}' at {datetime_str}...")
 
     result = await schedule_callback(
         context=context,
-        customer_id=customer_id,
         datetime_str=datetime_str,
         reason=reason
     )
