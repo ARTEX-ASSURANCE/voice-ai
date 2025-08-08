@@ -8,3 +8,6 @@ flask
 flask-cors
 uvicorn
 mysql-connector-python
+google-api-python-client
+google-auth-oauthlib
+sendgrid

@@ -18,15 +18,16 @@ from tools import (
     clear_context,
     update_contact_information,
     list_available_products,
-    get_product_guarantees,  
+    get_product_guarantees,
     # Outils de Contrat & Sinistre (Base Transactionnelle)
     list_adherent_contracts,
-    create_claim,    
+    create_claim,
     # Outils d'Action & Communication
     request_quote,
     log_issue,
     send_confirmation_email, # Corrigé depuis send_confirmation_by_email
     schedule_callback_with_advisor,
+    schedule_callback,
     expliquer_garantie_specifique,
     envoyer_document_adherent,
     qualifier_prospect_pour_conseiller,
@@ -63,6 +64,7 @@ class ArtexAgent(Agent):
                 log_issue,
                 send_confirmation_email,
                 schedule_callback_with_advisor,
+                schedule_callback,
                 expliquer_garantie_specifique,
                 envoyer_document_adherent,
                 qualifier_prospect_pour_conseiller,

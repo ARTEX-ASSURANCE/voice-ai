@@ -27,6 +27,42 @@ Ce projet nécessite une base de données MySQL pour fonctionner.
     ```
     *Note : Assurez-vous que les informations d'identification de l'utilisateur correspondent à celles que vous configurerez dans les fichiers `.env` et `secrets.toml`.*
 
+### Configuration des Services Externes
+
+#### Intégration Google Calendar (pour la planification de rappels)
+
+L'outil `schedule_callback` nécessite une intégration avec Google Calendar.
+
+1.  **Créez un Projet Google Cloud :**
+    *   Allez sur la [console Google Cloud](https://console.cloud.google.com/) et créez un nouveau projet.
+
+2.  **Activez l'API Google Calendar :**
+    *   Dans votre projet, allez à la section "API et services" > "Bibliothèque".
+    *   Recherchez "Google Calendar API" et activez-la.
+
+3.  **Créez un Compte de Service :**
+    *   Allez à "API et services" > "Identifiants".
+    *   Cliquez sur "Créer des identifiants" et choisissez "Compte de service".
+    *   Donnez un nom à votre compte de service (ex: `voicebot-calendar-manager`) et accordez-lui le rôle "Éditeur" (ou un rôle plus restreint si vous le souhaitez).
+    *   Une fois le compte créé, cliquez dessus, allez dans l'onglet "Clés", cliquez sur "Ajouter une clé" > "Créer une nouvelle clé".
+    *   Choisissez le format **JSON** et téléchargez le fichier.
+
+4.  **Partagez votre Calendrier :**
+    *   Ouvrez Google Calendar.
+    *   Allez dans les paramètres du calendrier que vous souhaitez utiliser.
+    *   Dans la section "Partager avec des personnes spécifiques", ajoutez l'adresse e-mail de votre compte de service (elle se trouve dans le fichier JSON que vous avez téléchargé, sous la clé `client_email`).
+    *   Assurez-vous de lui donner les permissions "Apporter des modifications aux événements".
+
+5.  **Configurez les Variables d'Environnement :**
+    *   Placez le fichier JSON de la clé du compte de service dans le répertoire `backend`.
+    *   Ouvrez votre fichier `backend/.env` et mettez à jour les variables suivantes :
+        ```
+        GOOGLE_CALENDAR_ID="votre_id_de_calendrier_ici"
+        GOOGLE_SERVICE_ACCOUNT_FILE="chemin/vers/votre_fichier.json"
+        ```
+        *   L'ID du calendrier se trouve dans les paramètres de votre calendrier Google.
+        *   Le chemin du fichier de service doit être relatif au répertoire `backend`.
+
 ### 1. Configuration du Backend
 
 1.  **Naviguez vers le répertoire backend :**

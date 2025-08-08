@@ -10,6 +10,10 @@ import json
 # Imports pour les services externes (e-mail, etc.)
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail
+from google.oauth2 import service_account
+from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
+from datetime import datetime, timedelta
 
 # Imports pour la logique de l'agent
 from livekit.agents import function_tool, RunContext
@@ -543,6 +547,57 @@ async def qualifier_prospect_pour_conseiller(context: RunContext, produit_intere
     await _send_notification_email(subject, body)
     
     return "Merci pour ces précisions. J'ai transmis toutes ces informations à un conseiller qui vous recontactera très prochainement avec une offre adaptée. Puis-je faire autre chose pour vous ?"
+
+
+@function_tool
+async def schedule_callback(context: RunContext, customer_id: str, datetime_str: str, reason: str) -> str:
+    """
+    Schedules a callback for a customer by creating an event in Google Calendar.
+    The datetime_str should be in ISO format, e.g., '2024-12-25T14:30:00'.
+    """
+    logger.info(f"Attempting to schedule a callback for customer {customer_id} at {datetime_str}")
+
+    try:
+        creds_path = os.getenv("GOOGLE_SERVICE_ACCOUNT_FILE")
+        calendar_id = os.getenv("GOOGLE_CALENDAR_ID")
+
+        if not creds_path or not calendar_id:
+            logger.error("Google Calendar credentials or Calendar ID are not configured in environment variables.")
+            return "Le service de calendrier n'est pas configuré. Impossible de planifier le rappel."
+
+        creds = service_account.Credentials.from_service_account_file(
+            creds_path, scopes=['https://www.googleapis.com/auth/calendar'])
+        service = build('calendar', 'v3', credentials=creds)
+
+        start_time = datetime.fromisoformat(datetime_str)
+        end_time = start_time + timedelta(minutes=30)  # Assume 30-minute slot
+
+        event = {
+            'summary': f'Rappel pour le client: {customer_id}',
+            'description': f'Motif: {reason}',
+            'start': {
+                'dateTime': start_time.isoformat(),
+                'timeZone': 'Europe/Paris',
+            },
+            'end': {
+                'dateTime': end_time.isoformat(),
+                'timeZone': 'Europe/Paris',
+            },
+        }
+
+        created_event = service.events().insert(calendarId=calendar_id, body=event).execute()
+        logger.info(f"Event created: {created_event.get('htmlLink')}")
+        return f"J'ai bien planifié un rappel pour vous le {start_time.strftime('%d/%m/%Y à %H:%M')}. Un conseiller vous appellera."
+
+    except HttpError as error:
+        logger.error(f"An error occurred with Google Calendar API: {error}")
+        return "Une erreur est survenue lors de la communication avec le service de calendrier."
+    except ValueError:
+        logger.error(f"Invalid datetime format for schedule_callback: {datetime_str}")
+        return "Le format de la date et de l'heure est invalide. Veuillez utiliser le format ISO, par exemple '2024-12-25T14:30:00'."
+    except Exception as e:
+        logger.error(f"An unexpected error occurred in schedule_callback: {e}", exc_info=True)
+        return "Une erreur technique inattendue est survenue lors de la planification du rappel."
 
 @function_tool
 async def enregistrer_feedback_appel(context: RunContext, note: int, commentaire: Optional[str] = None) -> str:
