@@ -1,14 +1,31 @@
-# Centre d'Appel IA LiveKit pour Voitures (Exemple)
+# Centre d'Appel IA LiveKit
 
 ## Instructions de Configuration et d'Exécution du Projet
 
-Ce projet se compose d'un frontend React et d'un backend Python Flask.
+Ce projet se compose d'un backend Python Flask et d'un tableau de bord de supervision Streamlit.
 
 ### Prérequis
 
-*   Node.js et npm (ou yarn) pour le frontend.
-*   Python 3.x et pip pour le backend.
+*   Python 3.x et pip.
 *   Un compte LiveKit et des identifiants (Clé API, Secret API, URL du Serveur).
+*   MySQL d'installé et configuré.
+
+### Configuration de la Base de Données
+
+Ce projet nécessite une base de données MySQL pour fonctionner.
+
+1.  **Créez la base de données :**
+    ```sql
+    CREATE DATABASE extranet;
+    ```
+
+2.  **Créez un utilisateur (optionnel mais recommandé) :**
+    ```sql
+    CREATE USER 'root1'@'localhost' IDENTIFIED BY 'ARTEX123';
+    GRANT ALL PRIVILEGES ON extranet.* TO 'root1'@'localhost';
+    FLUSH PRIVILEGES;
+    ```
+    *Note : Assurez-vous que les informations d'identification de l'utilisateur correspondent à celles que vous configurerez dans les fichiers `.env` et `secrets.toml`.*
 
 ### 1. Configuration du Backend
 
@@ -29,14 +46,11 @@ Ce projet se compose d'un frontend React et d'un backend Python Flask.
     ```
 
 4.  **Configurez les variables d'environnement :**
-    *   Créez un fichier nommé `.env` dans le répertoire `backend`.
-    *   Ajoutez vos identifiants LiveKit à ce fichier :
+    *   Le fichier `.env.example` sert de modèle. Copiez-le vers un nouveau fichier nommé `.env` :
+        ```bash
+        cp .env.example .env
         ```
-        LIVEKIT_API_KEY=votre_clé_api_ici
-        LIVEKIT_API_SECRET=votre_secret_api_ici
-        LIVEKIT_URL=votre_url_livekit_ici
-        ```
-        Remplacez les espaces réservés par votre clé API LiveKit, votre secret et l'URL de votre serveur (par exemple, `https://votre-projet-abcdef.livekit.cloud`).
+    *   Modifiez le fichier `.env` pour y ajouter vos propres clés API et autres secrets.
 
 5.  **Lancez le serveur backend :**
     ```bash
@@ -44,52 +58,51 @@ Ce projet se compose d'un frontend React et d'un backend Python Flask.
     ```
     Le backend devrait maintenant être en cours d'exécution sur `http://localhost:5001`.
 
-### 2. Configuration du Frontend
+### 2. Configuration du Dashboard Streamlit
 
-1.  **Naviguez vers le répertoire frontend (depuis la racine du projet) :**
+1.  **Naviguez vers le répertoire dashboard (depuis la racine du projet) :**
     ```bash
-    cd frontend
+    cd dashboard
     ```
 
-2.  **Installez les dépendances :**
+2.  **Créez un environnement virtuel Python (recommandé) :**
     ```bash
-    npm install
-    # ou
-    # yarn install
+    python -m venv venv
+    source venv/bin/activate  # Sous Windows, utilisez `venv\Scripts\activate`
     ```
 
-3.  **Configurez les variables d'environnement :**
-    *   Créez un fichier nommé `.env` dans le répertoire `frontend`.
-    *   Ajoutez l'URL de votre serveur LiveKit et l'URL du backend à ce fichier :
+3.  **Installez les dépendances :**
+    ```bash
+    pip install -r requirements.txt
+    ```
+
+4.  **Configurez les secrets :**
+    *   Le fichier `secrets.toml.example` sert de modèle. Copiez-le vers un nouveau fichier nommé `secrets.toml` dans le répertoire `.streamlit` :
+        ```bash
+        cp dashboard/.streamlit/secrets.toml.example dashboard/.streamlit/secrets.toml
         ```
-        VITE_LIVEKIT_URL=wss://votre-domaine-livekit.com
-        VITE_BACKEND_URL=http://localhost:5001
-        ```
-        Remplacez `wss://votre-domaine-livekit.com` par votre URL WebSocket LiveKit réelle (c'est souvent la même que votre `LIVEKIT_URL` mais préfixée par `wss://` et sans le `/` à la fin si `LIVEKIT_URL` l'a, ou cela peut être un point de terminaison WebSocket spécifique comme `wss://votre-projet-abcdef.livekit.cloud`).
-        `VITE_BACKEND_URL` doit pointer vers votre serveur backend en cours d'exécution.
+    *   Modifiez le fichier `secrets.toml` pour y ajouter vos identifiants de base de données.
 
-4.  **Lancez le serveur de développement frontend :**
+
+5.  **Lancez le dashboard :**
     ```bash
-    npm run dev
-    # ou
-    # yarn dev
+    streamlit run app.py
     ```
-    Le frontend devrait maintenant être accessible dans votre navigateur, généralement à `http://localhost:5173` (Vite affichera l'URL exacte).
+    Le dashboard devrait maintenant être accessible dans votre navigateur, généralement à `http://localhost:8501`.
 
 ### 3. Utilisation de l'Application
 
-*   Assurez-vous que les serveurs backend et frontend sont tous deux en cours d'exécution.
-*   Ouvrez l'URL du frontend dans votre navigateur (`http://localhost:5174` ou similaire).
-*   L'interface principale vous permet de démarrer un appel avec l'agent vocal.
-*   Une navigation simple en haut de la page permet d'accéder à l'interface d'appel (`/`) ou au tableau de bord (`/dashboard`).
+*   Assurez-vous que le serveur backend et le dashboard sont tous deux en cours d'exécution.
+*   L'agent vocal est accessible via des appels SIP, gérés par le backend.
+*   Le dashboard de supervision est accessible via l'URL fournie par Streamlit.
 
-### 4. Tableau de Bord de Supervision de l'Agent
+### 4. Dashboard de Supervision de l'Agent
 
 Ce projet inclut un tableau de bord de supervision pour analyser les performances et les activités de l'agent IA. Le backend collecte des données détaillées et expose des APIs pour alimenter ce tableau de bord. Le frontend fournit une interface utilisateur pour visualiser ces données.
 
 **Accès au Tableau de Bord:**
 
-*   Une fois le frontend et le backend démarrés, accédez au tableau de bord en naviguant vers l'URL `/dashboard` dans votre navigateur (par exemple, `http://localhost:5174/dashboard`).
+*   Une fois le backend et le dashboard démarrés, accédez au tableau de bord en naviguant vers l'URL du dashboard (par exemple, `http://localhost:8501`).
 
 **Fonctionnalités du Tableau de Bord:**
 

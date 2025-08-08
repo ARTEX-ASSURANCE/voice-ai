@@ -1,1 +1,3 @@
 backend/vector_store.pkl
+backend/.env
+dashboard/.streamlit/secrets.toml
