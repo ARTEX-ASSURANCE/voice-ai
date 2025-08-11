@@ -197,8 +197,10 @@ async def send_confirmation_email(context: RunContext, subject: str, body: str) 
 @function_tool
 async def schedule_callback(context: RunContext, reason: str, datetime_str: str) -> str:
     """
-    Schedules a callback for the current client by creating an event in Google Calendar.
-    The datetime_str should be in ISO format, e.g., '2024-12-25T14:30:00'.
+    Schedules a callback for the current client by creating a Google Calendar event.
+    CRITICAL: The 'datetime_str' parameter MUST be a string in the exact ISO 8601 format: 'YYYY-MM-DDTHH:MM:SS'.
+    You must convert any natural language date or time (e.g., 'tomorrow at 2pm') into this specific string format before calling this tool.
+    Example: A request for 'December 25th, 2024 at 2:30 PM' must be converted to '2024-12-25T14:30:00'.
     """
     client: Optional[Client] = context.userdata.get("client_context")
     if not client:
