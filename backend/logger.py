@@ -24,7 +24,12 @@ def configure_logger(db_params: Optional[Dict] = None, log_file: Optional[str] =
     """
     global DB_CONNECTION_PARAMS, LOG_FILE_PATH
 
-    # Clear existing handlers to prevent duplication on re-configuration
+    # Aggressively remove handlers from the root logger to prevent duplicates from other libraries.
+    root_logger = logging.getLogger()
+    if root_logger.hasHandlers():
+        root_logger.handlers.clear()
+
+    # Clear existing handlers on our specific logger as well
     if _logger.hasHandlers():
         _logger.handlers.clear()
 
