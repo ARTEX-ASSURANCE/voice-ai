@@ -27,11 +27,14 @@ db_params_for_logger = {
     'database': os.getenv("DB_NAME"),
     'port': os.getenv("DB_PORT", 3306)
 }
+log_file_path = os.path.join(os.path.dirname(__file__), 'agent.log')
+
+# Configure with file logging and, if available, database logging
 if not all(db_params_for_logger[key] for key in ['host', 'user', 'password', 'database']):
-    configure_logger() # Configure without DB
+    configure_logger(log_file=log_file_path)
     log_activity("agent.startup", "Database env vars missing, DB logging disabled.", level="WARNING")
 else:
-    configure_logger(db_params=db_params_for_logger)
+    configure_logger(db_params=db_params_for_logger, log_file=log_file_path)
 
 # --- Main Agent Entrypoint ---
 async def entrypoint(ctx: JobContext):

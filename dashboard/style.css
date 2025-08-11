@@ -1,0 +1,20 @@
+/* dashboard/style.css */
+
+/* Add rounded corners and a subtle shadow to the main block containers */
+div[data-testid="stVerticalBlock"] > div[data-testid="stVerticalBlock"] > div[data-testid="stVerticalBlock"] {
+    border-radius: 10px;
+    padding: 20px;
+    background-color: #1C1C1E; /* Match secondary background color */
+    box-shadow: 0 4px 8px 0 rgba(0, 0, 0, 0.2);
+}
+
+/* Style for expanders to make them more distinct */
+div[data-testid="stExpander"] {
+    border-radius: 8px;
+    border: 1px solid #333;
+}
+
+/* Style for tabs to make them look more modern */
+div[data-testid="stTabs"] {
+    border-radius: 8px;
+}
