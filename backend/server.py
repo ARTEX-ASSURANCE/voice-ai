@@ -2,35 +2,26 @@ import os
 from flask import Flask, request
 from dotenv import load_dotenv
 from flask_cors import CORS
-from livekit.api import LiveKitAPI, AccessToken, VideoGrants, ListRoomsRequest # Importations mises à jour
+from livekit.api import LiveKitAPI, AccessToken, VideoGrants, ListRoomsRequest
 import uuid
-import os # Assurez-vous que os est importé pour getenv
+from logger import configure_logger, log_activity, log_error
 
-# Importer le logger d'erreurs et sa fonction de configuration
-from error_logger import set_db_connection_params, log_system_error
-
+# --- Load Environment & Configure Logger ---
 load_dotenv()
 
-# Configurer les paramètres de connexion pour le error_logger au démarrage
-# Ceci suppose que les mêmes variables d'environnement DB_* sont utilisées par db_driver et error_logger
-try:
-    db_params_for_error_logger = {
-        'host': os.getenv("DB_HOST"),
-        'user': os.getenv("DB_USER"),
-        'password': os.getenv("DB_PASSWORD"),
-        'database': os.getenv("DB_NAME"),
-        'port': os.getenv("DB_PORT", 3306) # Ajouter le port avec une valeur par défaut
-    }
-    if not all(db_params_for_error_logger[key] for key in ['host', 'user', 'password', 'database']):
-        raise ValueError("Variables d'environnement BD manquantes pour error_logger.")
-    set_db_connection_params(db_params_for_error_logger)
-except ValueError as ve:
-    # Utiliser le logger standard Python si la configuration de error_logger échoue.
-    import logging
-    logging.critical(f"Échec de la configuration des paramètres BD pour error_logger: {ve}. La journalisation des erreurs BD sera désactivée.")
-except Exception as e:
-    import logging
-    logging.critical(f"Erreur inattendue lors de la configuration de error_logger: {e}. La journalisation des erreurs BD sera désactivée.")
+# Configure logger at startup
+db_params_for_logger = {
+    'host': os.getenv("DB_HOST"),
+    'user': os.getenv("DB_USER"),
+    'password': os.getenv("DB_PASSWORD"),
+    'database': os.getenv("DB_NAME"),
+    'port': os.getenv("DB_PORT", 3306)
+}
+if not all(db_params_for_logger[key] for key in ['host', 'user', 'password', 'database']):
+    configure_logger() # Configure without DB
+    log_activity("server.startup", "Database env vars missing, DB logging disabled.", level="WARNING")
+else:
+    configure_logger(db_params=db_params_for_logger)
 
 
 app = Flask(__name__)
@@ -53,7 +44,7 @@ async def get_rooms():
     livekit_api_secret = os.getenv("LIVEKIT_API_SECRET")
 
     if not all([livekit_host, livekit_api_key, livekit_api_secret]):
-        print("Avertissement : L'URL du serveur LiveKit, la clé API ou le secret API ne sont pas entièrement configurés pour get_rooms.")
+        log_activity("server.get_rooms", "LiveKit connection details are not fully configured.", level="WARNING")
         return [] # Retourner une liste vide car l'appel API échouera
 
     # Utiliser l'importation directe de LiveKitAPI, ListRoomsRequest
