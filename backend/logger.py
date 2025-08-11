@@ -6,45 +6,45 @@ import mysql.connector
 import os
 from json_log_formatter import JSONFormatter
 
-# --- Global Logger Instance ---
+# --- Instance Globale du Logger ---
 _logger = logging.getLogger("artex_logger")
 _logger.setLevel(logging.INFO)
-_logger.propagate = False # Prevent duplicate logs in parent loggers
+_logger.propagate = False # Empêche les logs de remonter aux loggers parents
 
-# --- Configuration Store ---
+# --- Stockage de la Configuration ---
 DB_CONNECTION_PARAMS = None
 LOG_FILE_PATH = None
 
 def configure_logger(db_params: Optional[Dict] = None, log_file: Optional[str] = None):
     """
-    Configures the logger. To be called once at application startup.
-    - Sets up console logging (always on).
-    - Sets up JSON file logging if 'log_file' is provided.
-    - Sets up database logging if 'db_params' are provided.
+    Configure le logger. À appeler une seule fois au démarrage de l'application.
+    - Configure la journalisation sur la console (toujours activée).
+    - Configure la journalisation dans un fichier JSON si 'log_file' est fourni.
+    - Configure la journalisation dans la base de données si 'db_params' sont fournis.
     """
     global DB_CONNECTION_PARAMS, LOG_FILE_PATH
 
-    # Aggressively remove handlers from the root logger to prevent duplicates from other libraries.
+    # Supprime agressivement les gestionnaires du logger racine pour éviter les doublons d'autres bibliothèques.
     root_logger = logging.getLogger()
     if root_logger.hasHandlers():
         root_logger.handlers.clear()
 
-    # Clear existing handlers on our specific logger as well
+    # Supprime également les gestionnaires existants sur notre logger spécifique
     if _logger.hasHandlers():
         _logger.handlers.clear()
 
-    # 1. Console Handler (Standard Formatter)
+    # 1. Gestionnaire de Console (Format Standard)
     ch = logging.StreamHandler()
     ch_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
     ch.setFormatter(ch_formatter)
     _logger.addHandler(ch)
 
-    # 2. JSON File Handler (if path is provided)
+    # 2. Gestionnaire de Fichier JSON (si le chemin est fourni)
     if log_file:
         LOG_FILE_PATH = log_file
         try:
-            fh = logging.FileHandler(LOG_FILE_PATH)
-            # Use a custom format for the JSON logs
+            fh = logging.FileHandler(LOG_FILE_PATH, encoding='utf-8')
+            # Utilise un format personnalisé pour les logs JSON
             json_formatter = JSONFormatter({
                 'timestamp': 'asctime',
                 'level': 'levelname',
@@ -57,26 +57,26 @@ def configure_logger(db_params: Optional[Dict] = None, log_file: Optional[str] =
             })
             fh.setFormatter(json_formatter)
             _logger.addHandler(fh)
-            _logger.info(f"Logger configured to output to JSON file: {log_file}")
+            _logger.info(f"Logger configuré pour écrire dans le fichier JSON : {log_file}")
         except Exception as e:
-            _logger.error(f"Failed to configure file logger at {log_file}: {e}")
+            _logger.error(f"Échec de la configuration du logger de fichier à {log_file}: {e}")
 
-    # 3. Database Connection
+    # 3. Connexion à la Base de Données
     if db_params:
         DB_CONNECTION_PARAMS = db_params
-        _logger.info("Logger configured with database parameters.")
+        _logger.info("Logger configuré avec les paramètres de la base de données.")
     else:
-        _logger.warning("Logger configured without database parameters. Database logging will be disabled.")
+        _logger.warning("Logger configuré sans paramètres de base de données. La journalisation en base de données sera désactivée.")
 
 def _get_db_connection():
     if not DB_CONNECTION_PARAMS: return None
     try:
         return mysql.connector.connect(**DB_CONNECTION_PARAMS)
     except mysql.connector.Error as e:
-        _logger.error(f"CRITICAL: Could not connect to DB for logging: {e}")
+        _logger.error(f"CRITIQUE : Impossible de se connecter à la BD pour la journalisation : {e}")
         return None
 
-# --- Public Logging Functions ---
+# --- Fonctions de Journalisation Publiques ---
 def log_error(
     source: str,
     message: str,
@@ -86,11 +86,11 @@ def log_error(
 ):
     trace_str = traceback.format_exc() if exception else None
 
-    # Log to console/file via standard logger
+    # Journalise sur la console/fichier via le logger standard
     log_extra = {'source': source, 'call_id': call_id, 'context': context}
     _logger.error(message, exc_info=exception, extra=log_extra)
 
-    # Log to database
+    # Journalise dans la base de données
     conn = _get_db_connection()
     if not conn: return
 
@@ -105,7 +105,7 @@ def log_error(
         cursor.execute(query, (None, source, message, trace_str, context_json_str))
         conn.commit()
     except Exception as db_err:
-        _logger.error("CRITICAL DB LOGGING FAILURE", exc_info=True, extra={'source': 'logger.log_error'})
+        _logger.error("ÉCHEC CRITIQUE DE LA JOURNALISATION EN BD", exc_info=True, extra={'source': 'logger.log_error'})
     finally:
         if conn and conn.is_connected(): conn.close()
 
@@ -118,10 +118,10 @@ def log_activity(
 ):
     log_extra = {'source': source, 'call_id': call_id, 'context': context}
 
-    # Log to console/file via standard logger
+    # Journalise sur la console/fichier via le logger standard
     _logger.log(logging.getLevelName(level.upper()), message, extra=log_extra)
 
-    # Log to database
+    # Journalise dans la base de données
     conn = _get_db_connection()
     if not conn: return
 
@@ -136,6 +136,6 @@ def log_activity(
         cursor.execute(query, (level.upper(), source, message, call_id, context_json_str))
         conn.commit()
     except Exception as db_err:
-        _logger.error("DB activity logging failure", exc_info=True, extra={'source': 'logger.log_activity'})
+        _logger.error("Échec de la journalisation d'activité en BD", exc_info=True, extra={'source': 'logger.log_activity'})
     finally:
         if conn and conn.is_connected(): conn.close()

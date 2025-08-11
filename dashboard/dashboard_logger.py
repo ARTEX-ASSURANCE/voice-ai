@@ -3,40 +3,40 @@ import os
 
 def get_dashboard_logger():
     """
-    Configures and returns a logger for the Streamlit dashboard.
-    It logs to both the console and a file named dashboard.log.
+    Configure et retourne un logger pour le tableau de bord Streamlit.
+    Il journalise à la fois dans la console et dans un fichier nommé dashboard.log.
     """
-    # Ensure the log file path is correct
+    # S'assure que le chemin du fichier de log est correct
     log_file_path = os.path.join(os.path.dirname(__file__), 'dashboard.log')
 
-    # Create logger
+    # Crée le logger
     logger = logging.getLogger("dashboard_logger")
 
-    # Prevent adding handlers multiple times in Streamlit's execution model
+    # Empêche l'ajout de gestionnaires plusieurs fois dans le modèle d'exécution de Streamlit
     if not logger.handlers:
         logger.setLevel(logging.INFO)
 
-        # File Handler
-        fh = logging.FileHandler(log_file_path)
+        # Gestionnaire de Fichier
+        fh = logging.FileHandler(log_file_path, encoding='utf-8')
         fh.setLevel(logging.INFO)
 
-        # Console Handler
+        # Gestionnaire de Console
         ch = logging.StreamHandler()
         ch.setLevel(logging.INFO)
 
-        # Formatter
+        # Formatteur
         formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
         fh.setFormatter(formatter)
         ch.setFormatter(formatter)
 
-        # Add handlers
+        # Ajoute les gestionnaires
         logger.addHandler(fh)
         logger.addHandler(ch)
 
     return logger
 
-# Example of how to use it:
+# Exemple d'utilisation :
 # from dashboard_logger import get_dashboard_logger
 # logger = get_dashboard_logger()
-# logger.info("This is an info message.")
-# logger.error("This is an error message.", exc_info=True)
+# logger.info("Ceci est un message d'information.")
+# logger.error("Ceci est un message d'erreur.", exc_info=True)

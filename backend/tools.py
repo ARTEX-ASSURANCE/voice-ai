@@ -1,4 +1,4 @@
-# tools.py (Refactored for new schema)
+# tools.py (Réfractorié pour le nouveau schéma)
 
 import logging
 from typing import Optional, List
@@ -7,214 +7,213 @@ from decimal import Decimal
 import os
 import json
 
-# External services
+# Services externes
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
-# Agent logic
+# Logique de l'agent
 from livekit.agents import function_tool, RunContext
 from db_driver import ExtranetDatabaseDriver, Client
-# from error_logger import log_system_error # This would need refactoring too
 
 logger = logging.getLogger("artex_agent.tools")
 
-# --- Internal Notification Helper ---
+# --- Aide à la Notification Interne ---
 async def _send_notification_email(subject: str, body: str) -> None:
     recipient_email = "s.bouloudn@artex-business.com"
-    logger.info(f"Preparing to send notification email to {recipient_email}")
+    logger.info(f"Préparation de l'envoi d'un e-mail de notification à {recipient_email}")
     try:
         api_key = os.getenv("SENDGRID_API_KEY")
         sender_email = os.getenv("SENDER_EMAIL")
         if not api_key or not sender_email:
-            logger.error("SendGrid API key or sender email not configured.")
+            logger.error("Clé API SendGrid ou e-mail de l'expéditeur non configuré.")
             return
 
         message = Mail(from_email=sender_email, to_emails=recipient_email, subject=subject, html_content=body.replace('\\n', '<br>'))
         sg = SendGridAPIClient(api_key)
         await sg.send(message)
-        logger.info(f"Notification email sent successfully to {recipient_email}.")
+        logger.info(f"E-mail de notification envoyé avec succès à {recipient_email}.")
     except Exception as e:
-        logger.error(f"Unexpected error sending notification email: {e}", exc_info=True)
+        logger.error(f"Erreur inattendue lors de l'envoi de l'e-mail de notification : {e}", exc_info=True)
 
-# --- Context Management Helper ---
+# --- Aide à la Gestion de Contexte ---
 
 def _handle_lookup_result(context: RunContext, result: Optional[Client] | List[Client], source: str) -> str:
     if not result:
         context.userdata["unconfirmed_client"] = None
-        return "Sorry, no matching client was found with that information."
+        return "Désolé, aucun client correspondant n'a été trouvé avec ces informations."
 
     if isinstance(result, list):
         if len(result) > 1:
-            return "I found multiple matching clients. To identify you precisely, can you please provide your email address?"
+            return "J'ai trouvé plusieurs clients correspondants. Pour vous identifier précisément, pouvez-vous me donner votre adresse e-mail ?"
         if not result:
             context.userdata["unconfirmed_client"] = None
-            return "Sorry, no matching client was found."
+            return "Désolé, aucun client correspondant n'a été trouvé."
         result = result[0]
 
     context.userdata["unconfirmed_client"] = result
-    logger.info(f"Unconfirmed client found via {source}: {result.FirstName} {result.LastName} (ID: {result.Id})")
+    logger.info(f"Client non confirmé trouvé via {source}: {result.FirstName} {result.LastName} (ID: {result.Id})")
     
-    # Simplified confirmation prompt
-    return f"I found a file for {result.FirstName} {result.LastName}. Can you please confirm this is you so I can access the file securely?"
+    # Invite de confirmation simplifiée
+    return f"J'ai trouvé un dossier pour {result.FirstName} {result.LastName}. Pouvez-vous confirmer qu'il s'agit bien de vous pour que je puisse accéder au dossier en toute sécurité ?"
 
-# --- Identity and Context Tools (Refactored) ---
+# --- Outils d'Identité et de Contexte (Réfractoriés) ---
 
 @function_tool
 async def confirm_identity(context: RunContext, confirmation: bool) -> str:
     """
-    Confirms the identity of the user if they agree they are the person found.
-    This tool MUST be called after a lookup tool has found a potential client.
+    Confirme l'identité de l'utilisateur s'il accepte être la personne trouvée.
+    Cet outil DOIT être appelé après qu'un outil de recherche a trouvé un client potentiel.
     """
     unconfirmed: Optional[Client] = context.userdata.get("unconfirmed_client")
     if not unconfirmed:
-        return "Please search for a client before confirming an identity."
+        return "Veuillez rechercher un client avant de confirmer une identité."
 
     if confirmation:
         context.userdata["client_context"] = unconfirmed
         context.userdata["unconfirmed_client"] = None
-        logger.info(f"Identity confirmed for: {unconfirmed.FirstName} {unconfirmed.LastName} (ID: {unconfirmed.Id})")
-        return f"Thank you! Identity confirmed. The file for {unconfirmed.FirstName} {unconfirmed.LastName} is now open. How can I help you?"
+        logger.info(f"Identité confirmée pour : {unconfirmed.FirstName} {unconfirmed.LastName} (ID: {unconfirmed.Id})")
+        return f"Merci ! Identité confirmée. Le dossier de {unconfirmed.FirstName} {unconfirmed.LastName} est maintenant ouvert. Comment puis-je vous aider ?"
     else:
         context.userdata["unconfirmed_client"] = None
-        logger.warning(f"User denied identity confirmation for client ID: {unconfirmed.Id}")
-        return "Okay, I will not access that file. How can I help you?"
+        logger.warning(f"L'utilisateur a refusé la confirmation d'identité pour le client ID : {unconfirmed.Id}")
+        return "D'accord, je n'accéderai pas à ce dossier. Comment puis-je vous aider ?"
 
 @function_tool
 async def clear_context(context: RunContext) -> str:
-    """Clears the currently selected client from the assistant's context."""
+    """Efface le client actuellement sélectionné du contexte de l'assistant."""
     context.userdata["client_context"] = None
     context.userdata["unconfirmed_client"] = None
-    return "The context has been reset. How can I help you?"
+    return "Le contexte a été réinitialisé. Comment puis-je vous aider ?"
 
-# --- Client Lookup Tools (Refactored) ---
+# --- Outils de Recherche de Client (Réfractoriés) ---
 
 @function_tool
 async def lookup_client_by_email(context: RunContext, email: str) -> str:
-    """Looks up a client using their email address to start the identification process."""
+    """Recherche un client en utilisant son adresse e-mail pour démarrer le processus d'identification."""
     db: ExtranetDatabaseDriver = context.userdata["db_driver"]
-    logger.info(f"Tool: lookup_client_by_email called with email: {email}")
+    logger.info(f"Outil : lookup_client_by_email appelé avec l'e-mail : {email}")
     client = db.get_client_by_email(email.strip())
     return _handle_lookup_result(context, client, "email")
 
 @function_tool
 async def lookup_client_by_phone(context: RunContext, phone: str) -> str:
-    """Looks up a client by their phone number."""
+    """Recherche un client par son numéro de téléphone."""
     db: ExtranetDatabaseDriver = context.userdata["db_driver"]
-    logger.info(f"Tool: lookup_client_by_phone called with phone: {phone}")
+    logger.info(f"Outil : lookup_client_by_phone appelé avec le téléphone : {phone}")
     clients = db.get_clients_by_phone(phone.strip())
     return _handle_lookup_result(context, clients, "phone")
 
 @function_tool
 async def lookup_client_by_fullname(context: RunContext, last_name: str, first_name: str) -> str:
-    """Looks up a client using their full name."""
+    """Recherche un client en utilisant son nom complet."""
     db: ExtranetDatabaseDriver = context.userdata["db_driver"]
-    logger.info(f"Tool: lookup_client_by_fullname called with name: {first_name} {last_name}")
+    logger.info(f"Outil : lookup_client_by_fullname appelé avec le nom : {first_name} {last_name}")
     clients = db.get_clients_by_fullname(last_name.strip(), first_name.strip())
     return _handle_lookup_result(context, clients, "fullname")
 
 @function_tool
 async def get_client_details(context: RunContext) -> str:
-    """Gets the personal details of the currently loaded and confirmed client."""
+    """Obtient les détails personnels du client actuellement chargé et confirmé."""
     client: Optional[Client] = context.userdata.get("client_context")
     if not client:
-        return "No client is currently selected and confirmed. Please search for and confirm a client's identity first."
+        return "Aucun client n'est actuellement sélectionné et confirmé. Veuillez d'abord rechercher et confirmer l'identité d'un client."
     
-    return (f"Details for {client.FirstName} {client.LastName} (ID: {client.Id}): "
-            f"Email: {client.Email}, Phone: {client.Phone}, "
-            f"Address: {client.Address}, {client.City}.")
+    return (f"Détails pour {client.FirstName} {client.LastName} (ID: {client.Id}): "
+            f"Email: {client.Email}, Téléphone: {client.Phone}, "
+            f"Adresse: {client.Address}, {client.City}.")
 
 @function_tool
 async def update_contact_information(context: RunContext, address: Optional[str] = None, city: Optional[str] = None, phone: Optional[str] = None, email: Optional[str] = None) -> str:
-    """Updates the contact information of the currently confirmed client."""
+    """Met à jour les informations de contact du client actuellement confirmé."""
     db: ExtranetDatabaseDriver = context.userdata["db_driver"]
     client: Optional[Client] = context.userdata.get("client_context")
     if not client:
-        return "Action impossible. The client's identity must be confirmed before information can be modified."
+        return "Action impossible. L'identité du client doit être confirmée avant que les informations puissent être modifiées."
 
     success = db.update_client_contact_info(client_id=client.Id, address=address, city=city, phone=phone, email=email)
 
     if success:
-        # Refresh client context with new data
+        # Rafraîchit le contexte client avec les nouvelles données
         updated_client = db.get_client_by_id(client.Id)
         if updated_client:
             context.userdata["client_context"] = updated_client
-        return "Contact information has been successfully updated."
+        return "Les informations de contact ont été mises à jour avec succès."
     else:
-        return "An error occurred while updating the information, or no information was changed."
+        return "Une erreur s'est produite lors de la mise à jour des informations, ou aucune information n'a été modifiée."
 
-# --- Action & Communication Tools (Partially Refactored) ---
+# --- Outils d'Action & Communication (Partiellement Réfractoriés) ---
 
 @function_tool
 async def list_client_contracts(context: RunContext) -> str:
-    """Lists all contracts associated with the currently confirmed client."""
+    """Liste tous les contrats associés au client actuellement confirmé."""
     db: ExtranetDatabaseDriver = context.userdata["db_driver"]
     client: Optional[Client] = context.userdata.get("client_context")
     if not client:
-        return "Please confirm the client's identity first."
+        return "Veuillez d'abord confirmer l'identité du client."
 
     contracts = db.get_contracts_by_client_id(client.Id)
     if not contracts:
-        return f"No contracts found for {client.FirstName} {client.LastName}."
+        return f"Aucun contrat trouvé pour {client.FirstName} {client.LastName}."
     
-    response_lines = [f"Here are the contracts for {client.FirstName} {client.LastName}:"]
+    response_lines = [f"Voici les contrats pour {client.FirstName} {client.LastName}:"]
     for c in contracts:
-        response_lines.append(f"- Contract Ref {c.Reference}, Status: {c.Status}")
+        response_lines.append(f"- Contrat Réf {c.Reference}, Statut: {c.Status}")
     return "\\n".join(response_lines)
 
 @function_tool
 async def send_confirmation_email(context: RunContext, subject: str, body: str) -> str:
-    """Sends a confirmation email to the currently identified client."""
+    """Envoie un e-mail de confirmation au client actuellement identifié."""
     client: Optional[Client] = context.userdata.get("client_context")
     if not client or not client.Email:
-        return "Action impossible. The client's identity must be confirmed and an email address must be on file."
+        return "Action impossible. L'identité du client doit être confirmée et une adresse e-mail doit être enregistrée."
 
-    logger.info(f"Preparing to send an email via SendGrid to {client.Email}")
+    logger.info(f"Préparation de l'envoi d'un e-mail via SendGrid à {client.Email}")
     try:
         api_key = os.getenv("SENDGRID_API_KEY")
         sender_email = os.getenv("SENDER_EMAIL")
         if not api_key or not sender_email:
-            logger.error("SendGrid API key or sender email not configured.")
-            return "Sorry, the email service is not configured correctly."
+            logger.error("Clé API SendGrid ou e-mail de l'expéditeur non configuré.")
+            return "Désolé, le service de messagerie n'est pas correctement configuré."
         
-        full_body = f"Hello {client.FirstName} {client.LastName},<br><br>{body.replace('\\n', '<br>')}<br><br>Sincerely,<br>The Team"
+        full_body = f"Bonjour {client.FirstName} {client.LastName},<br><br>{body.replace('\\n', '<br>')}<br><br>Cordialement,<br>L'équipe"
         message = Mail(from_email=sender_email, to_emails=client.Email, subject=subject, html_content=full_body)
         sg = SendGridAPIClient(api_key)
         response = await sg.send(message)
         
         if 200 <= response.status_code < 300:
-            logger.info(f"Email sent successfully to {client.Email}.")
-            return f"A confirmation email has been sent to {client.Email}."
+            logger.info(f"E-mail envoyé avec succès à {client.Email}.")
+            return f"Un e-mail de confirmation a été envoyé à {client.Email}."
         else:
-            logger.error(f"SendGrid API error. Status: {response.status_code}, Body: {response.body}")
-            return "An error occurred while sending the email."
+            logger.error(f"Erreur de l'API SendGrid. Statut: {response.status_code}, Corps: {response.body}")
+            return "Une erreur s'est produite lors de l'envoi de l'e-mail."
     except Exception as e:
-        logger.error(f"Unexpected error sending email with SendGrid: {e}")
-        return "Sorry, a major technical error occurred while sending the email."
+        logger.error(f"Erreur inattendue lors de l'envoi de l'e-mail avec SendGrid : {e}")
+        return "Désolé, une erreur technique majeure s'est produite lors de l'envoi de l'e-mail."
 
 @function_tool
 async def schedule_callback(context: RunContext, reason: str, datetime_str: str) -> str:
     """
-    Schedules a callback for the current client by creating a Google Calendar event.
-    CRITICAL: The 'datetime_str' parameter MUST be a string in the exact ISO 8601 format: 'YYYY-MM-DDTHH:MM:SS'.
-    You must convert any natural language date or time (e.g., 'tomorrow at 2pm') into this specific string format before calling this tool.
-    Example: A request for 'December 25th, 2024 at 2:30 PM' must be converted to '2024-12-25T14:30:00'.
+    Planifie un rappel pour le client actuel en créant un événement dans Google Calendar.
+    CRITIQUE : Le paramètre 'datetime_str' DOIT être une chaîne au format ISO 8601 exact : 'YYYY-MM-DDTHH:MM:SS'.
+    Vous devez convertir toute date ou heure en langage naturel (par exemple, 'demain à 14h') dans ce format de chaîne spécifique avant d'appeler cet outil.
+    Exemple : Une demande pour 'le 25 décembre 2024 à 14h30' doit être convertie en '2024-12-25T14:30:00'.
     """
     client: Optional[Client] = context.userdata.get("client_context")
     if not client:
-        return "The client's identity must be confirmed before scheduling a callback."
+        return "L'identité du client doit être confirmée avant de pouvoir planifier un rappel."
 
-    logger.info(f"Attempting to schedule a callback for client {client.Id} at {datetime_str}")
+    logger.info(f"Tentative de planification d'un rappel pour le client {client.Id} à {datetime_str}")
 
     try:
         creds_path = os.getenv("GOOGLE_SERVICE_ACCOUNT_FILE")
         calendar_id = os.getenv("GOOGLE_CALENDAR_ID")
 
         if not creds_path or not calendar_id:
-            logger.error("Google Calendar credentials or Calendar ID are not configured in environment variables.")
-            return "The calendar service is not configured. Cannot schedule callback."
+            logger.error("Les informations d'identification de Google Calendar ou l'ID du calendrier ne sont pas configurés dans les variables d'environnement.")
+            return "Le service de calendrier n'est pas configuré. Impossible de planifier un rappel."
 
         creds = service_account.Credentials.from_service_account_file(creds_path, scopes=['https://www.googleapis.com/auth/calendar'])
         service = build('calendar', 'v3', credentials=creds)
@@ -223,29 +222,29 @@ async def schedule_callback(context: RunContext, reason: str, datetime_str: str)
         end_time = start_time + timedelta(minutes=30)
 
         event = {
-            'summary': f'Callback for: {client.FirstName} {client.LastName} (ID: {client.Id})',
-            'description': f'Reason: {reason}',
+            'summary': f'Rappel pour : {client.FirstName} {client.LastName} (ID: {client.Id})',
+            'description': f'Raison : {reason}',
             'start': {'dateTime': start_time.isoformat(), 'timeZone': 'Europe/Paris'},
             'end': {'dateTime': end_time.isoformat(), 'timeZone': 'Europe/Paris'},
         }
 
         created_event = service.events().insert(calendarId=calendar_id, body=event).execute()
-        logger.info(f"Event created: {created_event.get('htmlLink')}")
-        return f"I have scheduled a callback for you for {start_time.strftime('%d/%m/%Y at %H:%M')}. An advisor will call you."
+        logger.info(f"Événement créé : {created_event.get('htmlLink')}")
+        return f"J'ai planifié un rappel pour vous le {start_time.strftime('%d/%m/%Y à %H:%M')}. Un conseiller vous appellera."
 
     except HttpError as error:
-        logger.error(f"An error occurred with Google Calendar API: {error}")
-        return "An error occurred while communicating with the calendar service."
+        logger.error(f"Une erreur s'est produite avec l'API Google Calendar : {error}")
+        return "Une erreur s'est produite lors de la communication avec le service de calendrier."
     except ValueError:
-        logger.error(f"Invalid datetime format for schedule_callback: {datetime_str}")
-        return "The date and time format is invalid. Please use the ISO format, e.g., '2024-12-25T14:30:00'."
+        logger.error(f"Format de date et d'heure invalide pour schedule_callback : {datetime_str}")
+        return "Le format de la date et de l'heure est invalide. Veuillez utiliser le format ISO, par exemple, '2024-12-25T14:30:00'."
     except Exception as e:
-        logger.error(f"An unexpected error occurred in schedule_callback: {e}", exc_info=True)
-        return "An unexpected technical error occurred while scheduling the callback."
+        logger.error(f"Une erreur inattendue s'est produite dans schedule_callback : {e}", exc_info=True)
+        return "Une erreur technique inattendue s'est produite lors de la planification du rappel."
 
-# --- Deprecated/Removed Tools (Commented Out for Reference) ---
-# The following tools depended on the old schema and have been disabled.
-# They would need to be re-implemented based on the new schema if their functionality is still required.
+# --- Outils Obsolètes/Supprimés (Commentés pour Référence) ---
+# Les outils suivants dépendaient de l'ancien schéma et ont été désactivés.
+# Ils devraient être ré-implémentés en fonction du nouveau schéma si leur fonctionnalité est toujours requise.
 
 # @function_tool
 # async def create_claim(...)

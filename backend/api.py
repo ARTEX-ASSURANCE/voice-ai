@@ -1,4 +1,4 @@
-# api.py (Refactored for new schema)
+# api.py (Réfractorié pour le nouveau schéma)
 
 import logging
 from livekit.agents import Agent
@@ -7,9 +7,9 @@ from db_driver import ExtranetDatabaseDriver
 from prompts import INSTRUCTIONS
 from langchain_google_genai import ChatGoogleGenerativeAI
 
-# --- Import refactored tools ---
+# --- Importation des outils réfractoriés ---
 from tools import (
-    # Identity & Context
+    # Identité & Contexte
     lookup_client_by_email,
     lookup_client_by_phone,
     lookup_client_by_fullname,
@@ -17,9 +17,9 @@ from tools import (
     get_client_details,
     clear_context,
     update_contact_information,
-    # Contracts
+    # Contrats
     list_client_contracts,
-    # Communication & Scheduling
+    # Communication & Planification
     send_confirmation_email,
     schedule_callback,
 )
@@ -32,7 +32,7 @@ class ArtexAgent(Agent):
             tts=google.TTS(language="fr-FR", voice_name="fr-FR-Chirp3-HD-Zephyr"),
             stt=deepgram.STT(model="nova-2", language="fr", endpointing_ms=300),
             vad=silero.VAD.load(min_silence_duration=0.3),
-            # --- Updated tool list ---
+            # --- Liste d'outils mise à jour ---
             tools=[
                 lookup_client_by_email,
                 lookup_client_by_phone,
@@ -48,9 +48,10 @@ class ArtexAgent(Agent):
         )
         self.db_driver = db_driver
         self.task_llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash-lite", temperature=0.3)
-        logging.info("ArtexAgent configured with new schema tools.")
+        logging.info("ArtexAgent configuré avec les outils du nouveau schéma.")
 
     def get_initial_userdata(self) -> dict:
+        """Retourne les données utilisateur initiales pour la session de l'agent."""
         return {
             "db_driver": self.db_driver,
             "agent": self,
@@ -60,5 +61,5 @@ class ArtexAgent(Agent):
         }
 
     async def summarize_text(self, text: str) -> str:
-        # This method can be removed if it's not used elsewhere.
-        return "The summary function has been moved to a dedicated tool."
+        # Cette méthode peut être supprimée si elle n'est pas utilisée ailleurs.
+        return "La fonction de résumé a été déplacée vers un outil dédié."

@@ -1,5 +1,3 @@
-# ai/dashboard/pages/explorateur.py (Version Finale avec N° Appelant)
-
 import streamlit as st
 import pandas as pd
 import json
@@ -14,17 +12,17 @@ st.set_page_config(
 )
 
 def load_css(file_name):
-    """Loads a CSS file and injects it into the Streamlit app."""
+    """Charge un fichier CSS et l'injecte dans l'application Streamlit."""
     try:
-        with open(file_name) as f:
+        with open(file_name, "r", encoding="utf-8") as f:
             st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
     except FileNotFoundError:
-        st.warning(f"CSS file not found: {file_name}")
+        st.warning(f"Fichier CSS non trouvé : {file_name}")
 
-# Load custom CSS
+# Charge le CSS personnalisé
 load_css("dashboard/style.css")
 
-# --- CHARGEMENT DES DONNÉES (avec la colonne numero_appelant) ---
+# --- CHARGEMENT DES DONNÉES ---
 @st.cache_data(ttl=60)
 def load_call_data():
     """
@@ -34,7 +32,7 @@ def load_call_data():
     SELECT 
         ja.id_appel, 
         ANY_VALUE(ja.timestamp_debut) as timestamp_debut, 
-        ANY_VALUE(ja.numero_appelant) as numero_appelant, -- Ajout de la colonne manquante
+        ANY_VALUE(ja.numero_appelant) as numero_appelant,
         ANY_VALUE(ja.id_adherent_contexte) as id_adherent_contexte, 
         ANY_VALUE(ja.resume_appel) as resume_appel,
         ANY_VALUE(COALESCE(ja.duree_appel_secondes, TIMESTAMPDIFF(SECOND, ja.timestamp_debut, ja.timestamp_fin))) as duree_appel_secondes,
@@ -103,7 +101,7 @@ else:
     if selected_identity != "Tous":
         filtered_df = filtered_df[filtered_df['identite_confirmee'] == selected_identity]
 
-# --- UI Layout with Tabs ---
+# --- Mise en page avec Onglets ---
 tab_list, tab_details = st.tabs(["Liste des Appels", "Analyse Détaillée"])
 
 with tab_list:
@@ -150,7 +148,6 @@ with tab_details:
         if selected_call_id:
             call_details = filtered_df[filtered_df['id_appel'] == selected_call_id].iloc[0]
             
-            # --- Detailed Layout with Columns ---
             main_col, transcript_col = st.columns([1, 1])
 
             with main_col:
@@ -197,10 +194,3 @@ with tab_details:
                     chat_container.text_area("Transcription (brute)", value=raw_transcript, height=450, disabled=True)
     else:
         st.info("Aucun appel à afficher. Modifiez vos filtres ou attendez de nouveaux appels.")
-
-
-
-
-
-
-

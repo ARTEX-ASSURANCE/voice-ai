@@ -1,4 +1,4 @@
-# db_driver.py (Refactored for new schema)
+# db_driver.py (Réfractorié pour le nouveau schéma)
 
 import mysql.connector
 import os
@@ -11,13 +11,13 @@ from decimal import Decimal
 import logging
 import json
 
-# Configure logging
+# Configuration du logging
 logger = logging.getLogger(__name__)
 
-# Load environment variables
+# Chargement des variables d'environnement
 load_dotenv()
 
-# --- NEW Dataclasses for the new schema ---
+# --- NOUVEAUX Dataclasses pour le nouveau schéma ---
 
 @dataclass
 class Client:
@@ -55,7 +55,7 @@ class ClientEventHistory:
     IsCompleted: bool = False
     EventId: Optional[str] = None
 
-# --- NEW Database Driver ---
+# --- NOUVEAU Pilote de Base de Données ---
 
 class ExtranetDatabaseDriver:
     def __init__(self):
@@ -65,7 +65,7 @@ class ExtranetDatabaseDriver:
         db_name = os.getenv("DB_NAME")
 
         if not all([db_host, db_user, db_password, db_name]):
-            raise ValueError("One or more database environment variables are not set.")
+            raise ValueError("Une ou plusieurs variables d'environnement de la base de données ne sont pas définies.")
 
         self.connection_params = {
             'host': db_host,
@@ -73,7 +73,7 @@ class ExtranetDatabaseDriver:
             'password': db_password,
             'database': db_name
         }
-        logger.info("Database driver initialized for new schema.")
+        logger.info("Pilote de base de données initialisé pour le nouveau schéma.")
 
     @contextmanager
     def _get_connection(self):
@@ -82,7 +82,7 @@ class ExtranetDatabaseDriver:
             conn = mysql.connector.connect(**self.connection_params)
             yield conn
         except mysql.connector.Error as err:
-            logger.error(f"Database connection error: {err}")
+            logger.error(f"Erreur de connexion à la base de données : {err}")
             raise
         finally:
             if conn and conn.is_connected():
@@ -102,7 +102,7 @@ class ExtranetDatabaseDriver:
             return []
         return [self._map_row(row, cursor, dataclass_type) for row in rows]
 
-    # --- NEW Methods for the new schema ---
+    # --- NOUVELLES Méthodes pour le nouveau schéma ---
 
     def get_client_by_id(self, client_id: int) -> Optional[Client]:
         with self._get_connection() as conn:
@@ -145,7 +145,7 @@ class ExtranetDatabaseDriver:
                 conn.commit()
                 return cursor.rowcount > 0
             except mysql.connector.Error as err:
-                logger.error(f"Failed to update contact info for client {client_id}: {err}")
+                logger.error(f"Échec de la mise à jour des informations de contact pour le client {client_id}: {err}")
                 conn.rollback()
                 return False
 
@@ -166,10 +166,10 @@ class ExtranetDatabaseDriver:
                 conn.commit()
                 return ClientEventHistory(Id=new_id, ClientId=client_id, EventId=event_id, Comment=comment, ForDate=for_date)
             except mysql.connector.Error as err:
-                logger.error(f"Database error while creating client event: {err}")
+                logger.error(f"Erreur de base de données lors de la création de l'événement client : {err}")
                 conn.rollback()
                 return None
                 
-    # All other methods for logging, knowledge base, etc. are removed for now
-    # as they depend on the old schema and would need to be refactored as well.
-    # This refactoring focuses on the core tables.
+    # Toutes les autres méthodes pour la journalisation, la base de connaissances, etc. sont supprimées pour le moment
+    # car elles dépendent de l'ancien schéma et devraient également être réfractoriées.
+    # Cette réfractoriation se concentre sur les tables principales.
