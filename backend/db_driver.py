@@ -55,6 +55,41 @@ class ClientEventHistory:
     IsCompleted: bool = False
     EventId: Optional[str] = None
 
+@dataclass
+class Employee:
+    Id: str
+    FirstName: Optional[str] = None
+    LastName: Optional[str] = None
+    NickName: Optional[str] = None
+    Function: Optional[str] = None
+    IsActive: bool = False
+
+@dataclass
+class Company:
+    Id: int
+    Name: Optional[str] = None
+    PhoneNumber: Optional[str] = None
+    Email: Optional[str] = None
+
+@dataclass
+class Formula:
+    Id: int
+    Name: Optional[str] = None
+    Description: Optional[str] = None
+    Price: Optional[Decimal] = None
+
+@dataclass
+class AdvisoryDuty:
+    Id: int
+    ClientId: int
+    ClientSituation: Optional[str] = None
+    Budget: Optional[str] = None
+    Need1: Optional[str] = None
+    Need2: Optional[str] = None
+    Need3: Optional[str] = None
+    SelectedCompany: Optional[str] = None
+    ProvidentCompanyId: Optional[int] = None
+
 # --- NOUVEAU Pilote de Base de Données ---
 
 class ExtranetDatabaseDriver:
@@ -170,6 +205,61 @@ class ExtranetDatabaseDriver:
                 conn.rollback()
                 return None
                 
+    def get_contract_by_ref(self, reference: str) -> Optional[Contract]:
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM Contracts WHERE Reference = %s", (reference,))
+            return self._map_row(cursor.fetchone(), cursor, Contract)
+
+    def get_client_history(self, client_id: int) -> List[ClientEventHistory]:
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            # Récupère les 5 événements les plus récents, en excluant les rappels futurs
+            query = "SELECT * FROM ClientEventsHistory WHERE ClientId = %s AND IsCompleted = 1 ORDER BY ForDate DESC LIMIT 5"
+            cursor.execute(query, (client_id,))
+            return self._map_rows(cursor.fetchall(), cursor, ClientEventHistory)
+
+    def get_upcoming_appointments(self, client_id: int) -> List[ClientEventHistory]:
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            query = "SELECT * FROM ClientEventsHistory WHERE ClientId = %s AND IsCompleted = 0 AND ForDate >= CURDATE() ORDER BY ForDate ASC"
+            cursor.execute(query, (client_id,))
+            return self._map_rows(cursor.fetchall(), cursor, ClientEventHistory)
+
+    def find_active_employee(self, name: Optional[str] = None, function: Optional[str] = None) -> List[Employee]:
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            query = "SELECT * FROM AspNetUsers WHERE IsActive = 1"
+            params = []
+            if name:
+                query += " AND (FirstName LIKE %s OR LastName LIKE %s OR NickName LIKE %s)"
+                like_name = f"%{name}%"
+                params.extend([like_name, like_name, like_name])
+            if function:
+                query += " AND Function = %s"
+                params.append(function)
+
+            cursor.execute(query, tuple(params))
+            return self._map_rows(cursor.fetchall(), cursor, Employee)
+
+    def get_company_by_id(self, company_id: int) -> Optional[Company]:
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM Companies WHERE Id = %s", (company_id,))
+            return self._map_row(cursor.fetchone(), cursor, Company)
+
+    def get_formula_by_id(self, formula_id: int) -> Optional[Formula]:
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM Formulas WHERE Id = %s", (formula_id,))
+            return self._map_row(cursor.fetchone(), cursor, Formula)
+
+    def get_advisory_duty(self, client_id: int) -> Optional[AdvisoryDuty]:
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM AdvisoryDuties WHERE ClientId = %s ORDER BY Id DESC LIMIT 1", (client_id,))
+            return self._map_row(cursor.fetchone(), cursor, AdvisoryDuty)
+
     # Toutes les autres méthodes pour la journalisation, la base de connaissances, etc. sont supprimées pour le moment
     # car elles dépendent de l'ancien schéma et devraient également être réfractoriées.
     # Cette réfractoriation se concentre sur les tables principales.

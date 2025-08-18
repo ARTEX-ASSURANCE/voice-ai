@@ -242,6 +242,135 @@ async def schedule_callback(context: RunContext, reason: str, datetime_str: str)
         logger.error(f"Une erreur inattendue s'est produite dans schedule_callback : {e}", exc_info=True)
         return "Une erreur technique inattendue s'est produite lors de la planification du rappel."
 
+# --- NOUVEAUX OUTILS (Basés sur le nouveau schéma) ---
+
+@function_tool
+async def get_contract_details(context: RunContext, contract_reference: str) -> str:
+    """Obtient les détails d'un contrat spécifique en utilisant sa référence."""
+    db: ExtranetDatabaseDriver = context.userdata["db_driver"]
+    client: Optional[Client] = context.userdata.get("client_context")
+    if not client:
+        return "Veuillez d'abord confirmer l'identité du client."
+
+    contract = db.get_contract_by_ref(contract_reference)
+    if not contract or contract.ClientId != client.Id:
+        return f"Aucun contrat trouvé avec la référence {contract_reference} pour {client.FirstName} {client.LastName}."
+
+    details = (f"Détails du contrat {contract.Reference}: Statut - {contract.Status}, "
+               f"Prix - {contract.Price}€, Date d'effet - {contract.EffectiveDate}, "
+               f"Date de résiliation - {contract.TerminationDate or 'N/A'}.")
+    return details
+
+@function_tool
+async def get_client_interaction_history(context: RunContext) -> str:
+    """Récupère un résumé des 5 dernières interactions terminées pour le client confirmé."""
+    db: ExtranetDatabaseDriver = context.userdata["db_driver"]
+    client: Optional[Client] = context.userdata.get("client_context")
+    if not client:
+        return "Veuillez d'abord confirmer l'identité du client."
+
+    history = db.get_client_history(client.Id)
+    if not history:
+        return "Aucun historique d'interaction trouvé pour ce client."
+
+    response_lines = ["Voici un résumé des dernières interactions :"]
+    for event in history:
+        response_lines.append(f"- Le {event.ForDate.strftime('%d/%m/%Y')}: {event.Comment} (Réf Événement: {event.EventId})")
+    return "\\n".join(response_lines)
+
+@function_tool
+async def check_upcoming_appointments(context: RunContext) -> str:
+    """Vérifie les rendez-vous ou rappels à venir pour le client confirmé."""
+    db: ExtranetDatabaseDriver = context.userdata["db_driver"]
+    client: Optional[Client] = context.userdata.get("client_context")
+    if not client:
+        return "Veuillez d'abord confirmer l'identité du client."
+
+    appointments = db.get_upcoming_appointments(client.Id)
+    if not appointments:
+        return "Il n'y a aucun rendez-vous à venir de prévu pour ce client."
+
+    response_lines = ["Voici les prochains rendez-vous :"]
+    for event in appointments:
+        response_lines.append(f"- Le {event.ForDate.strftime('%d/%m/%Y à %H:%M')}: {event.Comment}")
+    return "\\n".join(response_lines)
+
+@function_tool
+async def find_employee_for_escalation(context: RunContext, name: Optional[str] = None, function: Optional[str] = None) -> str:
+    """
+    Trouve un employé actif pour une escalade. Peut chercher par nom et/ou par fonction (ex: 'Support', 'Vente').
+    Notifie l'employé trouvé.
+    """
+    db: ExtranetDatabaseDriver = context.userdata["db_driver"]
+    employees = db.find_active_employee(name=name, function=function)
+
+    if not employees:
+        return "Désolé, je n'ai trouvé aucun employé actif correspondant à ces critères."
+    if len(employees) > 1:
+        return f"J'ai trouvé plusieurs employés correspondants : {', '.join([f'{e.FirstName} {e.LastName}' for e in employees])}. Pouvez-vous être plus spécifique ?"
+
+    employee = employees[0]
+    subject = "Escalade d'appel client"
+    body = f"Un appel nécessite votre attention. Veuillez consulter le dossier du client."
+    await _send_notification_email(subject, body)
+    return f"J'ai trouvé {employee.FirstName} {employee.LastName} ({employee.Function}) et lui ai envoyé une notification pour une prise en charge."
+
+@function_tool
+async def get_contract_company_info(context: RunContext, contract_reference: str) -> str:
+    """Récupère les informations sur la compagnie d'assurance qui gère un contrat spécifique."""
+    db: ExtranetDatabaseDriver = context.userdata["db_driver"]
+    client: Optional[Client] = context.userdata.get("client_context")
+    if not client:
+        return "Veuillez d'abord confirmer l'identité du client."
+
+    contract = db.get_contract_by_ref(contract_reference)
+    if not contract or contract.ClientId != client.Id or not contract.CompanyId:
+        return f"Impossible de trouver les informations de la compagnie pour le contrat {contract_reference}."
+
+    company = db.get_company_by_id(contract.CompanyId)
+    if not company:
+        return "Détails de la compagnie non trouvés."
+
+    return (f"Le contrat {contract.Reference} est géré par {company.Name}. "
+            f"Leur contact : Téléphone - {company.PhoneNumber or 'N/A'}, Email - {company.Email or 'N/A'}.")
+
+@function_tool
+async def get_contract_formula_details(context: RunContext, contract_reference: str) -> str:
+    """Obtient les détails de la formule (offre produit) pour un contrat spécifique."""
+    db: ExtranetDatabaseDriver = context.userdata["db_driver"]
+    client: Optional[Client] = context.userdata.get("client_context")
+    if not client:
+        return "Veuillez d'abord confirmer l'identité du client."
+
+    contract = db.get_contract_by_ref(contract_reference)
+    if not contract or contract.ClientId != client.Id or not contract.FormulaId:
+        return f"Impossible de trouver les détails de la formule pour le contrat {contract_reference}."
+
+    formula = db.get_formula_by_id(contract.FormulaId)
+    if not formula:
+        return "Détails de la formule non trouvés."
+
+    return (f"Le contrat {contract.Reference} est basé sur la formule '{formula.Name}'. "
+            f"Description : {formula.Description} Prix standard : {formula.Price}€.")
+
+@function_tool
+async def summarize_advisory_duty(context: RunContext) -> str:
+    """Fournit un résumé du document 'devoir de conseil' pour rassurer le client sur la pertinence de son contrat."""
+    db: ExtranetDatabaseDriver = context.userdata["db_driver"]
+    client: Optional[Client] = context.userdata.get("client_context")
+    if not client:
+        return "Veuillez d'abord confirmer l'identité du client."
+
+    duty = db.get_advisory_duty(client.Id)
+    if not duty:
+        return "Aucun résumé de devoir de conseil n'a été trouvé pour ce client."
+
+    summary = (f"Pour vous rassurer sur le choix de votre contrat, voici un résumé de notre analyse initiale : "
+               f"Votre situation était : '{duty.ClientSituation}' avec un budget de '{duty.Budget}'. "
+               f"Vos besoins principaux étaient : {duty.Need1}, {duty.Need2}, et {duty.Need3}. "
+               f"C'est sur cette base que la compagnie {duty.SelectedCompany} a été recommandée.")
+    return summary
+
 # --- Outils Obsolètes/Supprimés (Commentés pour Référence) ---
 # Les outils suivants dépendaient de l'ancien schéma et ont été désactivés.
 # Ils devraient être ré-implémentés en fonction du nouveau schéma si leur fonctionnalité est toujours requise.

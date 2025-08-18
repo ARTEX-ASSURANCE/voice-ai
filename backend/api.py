@@ -19,9 +19,19 @@ from tools import (
     update_contact_information,
     # Contrats
     list_client_contracts,
-    # Communication & Planification
-    send_confirmation_email,
+    get_contract_details,
+    get_contract_company_info,
+    get_contract_formula_details,
+    # Historique & Planification
+    get_client_interaction_history,
+    check_upcoming_appointments,
     schedule_callback,
+    # Escalade & Interne
+    find_employee_for_escalation,
+    # Devoir de Conseil
+    summarize_advisory_duty,
+    # Communication
+    send_confirmation_email,
 )
 
 class ArtexAgent(Agent):
@@ -34,6 +44,7 @@ class ArtexAgent(Agent):
             vad=silero.VAD.load(min_silence_duration=0.3),
             # --- Liste d'outils mise à jour ---
             tools=[
+                # Identité & Contexte
                 lookup_client_by_email,
                 lookup_client_by_phone,
                 lookup_client_by_fullname,
@@ -41,9 +52,21 @@ class ArtexAgent(Agent):
                 get_client_details,
                 clear_context,
                 update_contact_information,
+                # Contrats
                 list_client_contracts,
-                send_confirmation_email,
+                get_contract_details,
+                get_contract_company_info,
+                get_contract_formula_details,
+                # Historique & Planification
+                get_client_interaction_history,
+                check_upcoming_appointments,
                 schedule_callback,
+                # Escalade & Interne
+                find_employee_for_escalation,
+                # Devoir de Conseil
+                summarize_advisory_duty,
+                # Communication
+                send_confirmation_email,
             ],
         )
         self.db_driver = db_driver

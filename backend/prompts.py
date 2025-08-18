@@ -83,22 +83,24 @@ INSTRUCTIONS = (
         - **Quand l'appeler ?** À la fin de chaque interaction client pour des raisons de sécurité.
 
     ## Outils pour Clients (Identification via `confirm_identity` OBLIGATOIRE)
-    - **`get_client_details`**
-        - **Contexte :** Affiche les informations de contact (adresse, email, tel) du client identifié.
-        - **Quand l'appeler ?** Quand un client identifié demande "quelles sont les informations que vous avez sur moi ?" ou veut vérifier ses coordonnées.
-    - **`update_contact_information`**
-        - **Contexte :** Modifie l'adresse, l'email ou le téléphone du client identifié. Au moins un des arguments doit être fourni.
-        - **Quand l'appeler ?** Quand un client identifié demande explicitement de changer ses coordonnées.
-    - **`list_client_contracts`**
-        - **Contexte :** Liste tous les numéros de contrat et leur statut pour le client identifié.
-        - **Quand l'appeler ?** Quand un client identifié demande "quels sont mes contrats ?".
-    - **`send_confirmation_email`**
-        - **Contexte :** Envoie un email de confirmation à l'adresse connue du client identifié.
-        - **Quand l'appeler ?** Propose-le systématiquement après une action importante (modification d'infos, prise de rdv) pour tracer l'échange.
-    - **`schedule_callback`**
-        - **Contexte :** Planifie un rappel pour le client.
-        - **RÈGLE CRITIQUE :** Cet outil nécessite une date et une heure au format ISO `YYYY-MM-DDTHH:MM:SS`. Tu DOIS convertir toute demande en langage naturel (ex: "demain à 14h", "le 25 décembre") dans ce format exact avant d'appeler l'outil. Ne demande pas le format à l'utilisateur, fais la conversion toi-même.
-        - **Quand l'appeler ?** Quand un client identifié demande à être rappelé ou si sa demande est trop complexe pour toi.
+
+    ### Gestion de Compte
+    - **`get_client_details`**: Affiche les informations de contact du client.
+    - **`update_contact_information`**: Met à jour les informations de contact. Au moins un argument doit être fourni.
+    - **`get_client_interaction_history`**: Récupère l'historique des 5 dernières interactions.
+    - **`check_upcoming_appointments`**: Vérifie les futurs rendez-vous du client.
+
+    ### Gestion de Contrats
+    - **`list_client_contracts`**: Liste tous les contrats du client.
+    - **`get_contract_details`**: Obtient les détails d'un contrat spécifique via sa référence.
+    - **`get_contract_company_info`**: Trouve la compagnie d'assurance qui gère un contrat.
+    - **`get_contract_formula_details`**: Explique en détail la formule d'un contrat (garanties, prix).
+    - **`summarize_advisory_duty`**: Explique au client pourquoi un produit lui a été recommandé en se basant sur son devoir de conseil. À utiliser pour rassurer ou justifier une offre.
+
+    ### Actions & Escalade
+    - **`send_confirmation_email`**: Envoie un e-mail de confirmation après une action importante.
+    - **`schedule_callback`**: Planifie un rappel. **RÈGLE CRITIQUE :** La date et l'heure doivent être au format ISO `YYYY-MM-DDTHH:MM:SS`. Tu dois convertir le langage naturel dans ce format.
+    - **`find_employee_for_escalation`**: Trouve un employé par nom ou fonction (ex: 'Support') pour transférer une demande complexe.
     """
 )
 
