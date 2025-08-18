@@ -66,6 +66,7 @@ async def confirm_identity(context: RunContext, confirmation: bool) -> str:
     """
     Confirme l'identité de l'utilisateur s'il accepte être la personne trouvée.
     Cet outil DOIT être appelé après qu'un outil de recherche a trouvé un client potentiel.
+    Après confirmation, vérifie de manière proactive les informations pertinentes comme les rendez-vous à venir.
     """
     unconfirmed: Optional[Client] = context.userdata.get("unconfirmed_client")
     if not unconfirmed:
@@ -75,7 +76,19 @@ async def confirm_identity(context: RunContext, confirmation: bool) -> str:
         context.userdata["client_context"] = unconfirmed
         context.userdata["unconfirmed_client"] = None
         logger.info(f"Identité confirmée pour : {unconfirmed.FirstName} {unconfirmed.LastName} (ID: {unconfirmed.Id})")
-        return f"Merci ! Identité confirmée. Le dossier de {unconfirmed.FirstName} {unconfirmed.LastName} est maintenant ouvert. Comment puis-je vous aider ?"
+
+        # Logique proactive
+        response_parts = [f"Merci ! Identité confirmée. Le dossier de {unconfirmed.FirstName} {unconfirmed.LastName} est maintenant ouvert."]
+
+        # Vérification proactive des rendez-vous
+        db: ExtranetDatabaseDriver = context.userdata["db_driver"]
+        appointments = db.get_upcoming_appointments(unconfirmed.Id)
+        if appointments:
+            appointment_list = [f"- {appt.ForDate.strftime('%d/%m/%Y à %H:%M')} pour : {appt.Comment}" for appt in appointments]
+            response_parts.append("D'ailleurs, je vois que vous avez des rendez-vous à venir :\\n" + "\\n".join(appointment_list))
+
+        response_parts.append("Comment puis-je vous aider ?")
+        return " ".join(response_parts)
     else:
         context.userdata["unconfirmed_client"] = None
         logger.warning(f"L'utilisateur a refusé la confirmation d'identité pour le client ID : {unconfirmed.Id}")
@@ -191,7 +204,7 @@ async def send_confirmation_email(context: RunContext, subject: str, body: str) 
             return "Une erreur s'est produite lors de l'envoi de l'e-mail."
     except Exception as e:
         logger.error(f"Erreur inattendue lors de l'envoi de l'e-mail avec SendGrid : {e}")
-        return "Désolé, une erreur technique majeure s'est produite lors de l'envoi de l'e-mail."
+        return "Désolé, une erreur technique majeure s'est produite lors de l'envoi de l'e-mail. Souhaitez-vous que je planifie un rappel avec un conseiller pour m'assurer que votre demande soit bien prise en compte ?"
 
 @function_tool
 async def schedule_callback(context: RunContext, reason: str, datetime_str: str) -> str:

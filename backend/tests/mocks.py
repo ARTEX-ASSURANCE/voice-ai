@@ -69,7 +69,7 @@ class MockExtranetDatabaseDriver:
 
     def get_upcoming_appointments(self, client_id: int) -> List[ClientEventHistory]:
         # For testing, we can return a mix of completed and upcoming
-        return [event for event in self.history.get(client_id, []) if not event.IsCompleted]
+        return [event for event in self.history.get(client_id, []) if not event.IsCompleted and event.ForDate > datetime.now()]
 
     def find_active_employee(self, name: Optional[str] = None, function: Optional[str] = None) -> List[Employee]:
         return list(self.employees.values())

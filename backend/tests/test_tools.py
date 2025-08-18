@@ -1,6 +1,8 @@
 import pytest
 import asyncio
 from unittest.mock import MagicMock
+from datetime import datetime, timedelta
+from db_driver import ClientEventHistory
 from tools import (
     confirm_identity,
     clear_context,
@@ -13,7 +15,8 @@ from tools import (
     find_employee_for_escalation,
     get_contract_company_info,
     get_contract_formula_details,
-    summarize_advisory_duty
+    summarize_advisory_duty,
+    send_confirmation_email
 )
 from tests.mocks import MockExtranetDatabaseDriver
 
@@ -49,16 +52,32 @@ async def test_lookup_client_by_email_not_found(mock_context):
     assert mock_context.userdata["unconfirmed_client"] is None
 
 async def test_confirm_identity_success(mock_context):
-    """Test successful identity confirmation."""
-    # First, lookup a client to set the unconfirmed_client context
+    """Test successful identity confirmation without proactive message."""
     await lookup_client_by_email(mock_context, email="jean.dupont@email.com")
     assert mock_context.userdata["unconfirmed_client"] is not None
 
     result = await confirm_identity(mock_context, confirmation=True)
 
     assert "Identité confirmée" in result
+    assert "rendez-vous à venir" not in result # Ensure no proactive message
     assert mock_context.userdata["client_context"] is not None
-    assert mock_context.userdata["client_context"].Id == 1
+    assert mock_context.userdata["unconfirmed_client"] is None
+
+async def test_confirm_identity_success_and_proactive_check(mock_context):
+    """Test successful identity confirmation and proactive appointment check."""
+    # Add an upcoming appointment to the mock data
+    mock_context.userdata["db_driver"].history.setdefault(1, []).append(
+        ClientEventHistory(Id=1002, ClientId=1, Comment="Rappel pour discuter du contrat", ForDate=datetime.now() + timedelta(days=1), IsCompleted=False)
+    )
+
+    await lookup_client_by_email(mock_context, email="jean.dupont@email.com")
+    assert mock_context.userdata["unconfirmed_client"] is not None
+
+    result = await confirm_identity(mock_context, confirmation=True)
+
+    assert "Identité confirmée" in result
+    assert "je vois que vous avez des rendez-vous à venir" in result # Check for proactive message
+    assert mock_context.userdata["client_context"] is not None
     assert mock_context.userdata["unconfirmed_client"] is None
 
 async def test_confirm_identity_denied(mock_context):
@@ -157,3 +176,25 @@ async def test_summarize_advisory_duty_found(mock_context):
     result = await summarize_advisory_duty(mock_context)
     assert "Pour vous rassurer sur le choix de votre contrat" in result
     assert "Soins dentaires" in result
+
+async def test_send_confirmation_email_failure(mock_context, monkeypatch):
+    """Test the fallback mechanism when sending an email fails."""
+    # Set environment variables for the test
+    monkeypatch.setenv("SENDGRID_API_KEY", "test_key")
+    monkeypatch.setenv("SENDER_EMAIL", "test@sender.com")
+
+    # Confirm identity
+    await lookup_client_by_email(mock_context, email="jean.dupont@email.com")
+    # Use the simple confirmation to avoid proactive message interference
+    await confirm_identity(mock_context, confirmation=True)
+
+    # Mock the SendGridAPIClient to raise an exception
+    async def mock_send(*args, **kwargs):
+        raise Exception("Simulated SendGrid API failure")
+
+    monkeypatch.setattr("sendgrid.SendGridAPIClient.send", mock_send)
+
+    result = await send_confirmation_email(mock_context, subject="Test", body="Test")
+
+    assert "erreur technique majeure" in result
+    assert "planifie un rappel" in result
