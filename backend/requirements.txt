@@ -12,3 +12,5 @@ google-api-python-client
 google-auth-oauthlib
 sendgrid
 json-log-formatter
+pytest
+pytest-asyncio
