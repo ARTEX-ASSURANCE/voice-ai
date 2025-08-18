@@ -1,4 +1,4 @@
-# Centre d'Appel IA LiveKit pour Voitures (Exemple)
+# Centre d'Appel IA (Exemple)
 
 ## Instructions de Configuration et d'Exécution du Projet
 
