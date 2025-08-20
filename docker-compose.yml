@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  redis:
+    image: "redis:alpine"
+    ports:
+      - "6379:6379"
+
+  application:
+    build:
+      context: .
+      dockerfile: infra/application.Dockerfile
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    depends_on:
+      - redis
+
+  execution:
+    build:
+      context: .
+      dockerfile: infra/execution.Dockerfile
+    # The execution worker needs to connect to LiveKit, Redis, and the DB.
+    # It doesn't need to expose ports to the outside world.
+    env_file:
+      - .env
+    depends_on:
+      - redis

@@ -1,0 +1,7 @@
+livekit-agents
+livekit-plugins-google
+livekit-plugins-silero
+livekit-plugins-deepgram
+langchain-google-genai
+python-dotenv
+redis

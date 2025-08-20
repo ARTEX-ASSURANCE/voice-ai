@@ -13,8 +13,9 @@ from sendgrid.helpers.mail import Mail
 
 # Imports pour la logique de l'agent
 from livekit.agents import function_tool, RunContext
-from db_driver import ExtranetDatabaseDriver, Adherent
-from error_logger import log_system_error
+from src.data_access.driver import ExtranetDatabaseDriver, Adherent
+from src.shared.memory import MemoryManager
+# from error_logger import log_system_error # Deprecated
 
 logger = logging.getLogger("artex_agent.tools")
 
@@ -56,19 +57,20 @@ def _handle_lookup_result(context: RunContext, result: Optional[Adherent] | List
     Utilitaire pour gérer le résultat d'une recherche d'adhérent. NE confirme PAS l'identité.
     Stocke les correspondances potentielles dans une variable de contexte temporaire pour confirmation.
     """
+    memory: MemoryManager = context.userdata["memory"]
     if not result:
-        context.userdata["unconfirmed_adherent"] = None
+        memory.set_session_data("unconfirmed_adherent", None)
         return "Désolé, aucun adhérent correspondant n'a été trouvé avec ces informations."
 
     if isinstance(result, list):
         if len(result) > 1:
             return "J'ai trouvé plusieurs adhérents correspondants. Pour vous identifier précisément, pouvez-vous me donner votre adresse e-mail ou votre numéro de contrat ?"
         if not result:
-            context.userdata["unconfirmed_adherent"] = None
+            memory.set_session_data("unconfirmed_adherent", None)
             return "Désolé, aucun adhérent correspondant n'a été trouvé."
         result = result[0]
 
-    context.userdata["unconfirmed_adherent"] = result
+    memory.set_session_data("unconfirmed_adherent", result)
     logger.info(f"Adhérent non confirmé trouvé via {source}: {result.prenom} {result.nom} (ID: {result.id_adherent})")
     
     if source == "phone":
@@ -86,20 +88,18 @@ async def confirm_identity(context: RunContext, date_of_birth: str, postal_code:
     Confirme l'identité de l'utilisateur en utilisant sa date de naissance ET son code postal.
     Cet outil DOIT être appelé après qu'un outil de recherche a trouvé un adhérent potentiel.
     """
-    unconfirmed: Optional[Adherent] = context.userdata.get("unconfirmed_adherent")
-    db: ExtranetDatabaseDriver = context.userdata["db_driver"]
-    current_call_id: Optional[int] = context.userdata.get("current_call_journal_id")
+    memory: MemoryManager = context.userdata["memory"]
+    db: ExtranetDatabaseDriver = memory.db_driver
+    unconfirmed_dict = memory.get_session_data("unconfirmed_adherent")
+    unconfirmed = Adherent(**unconfirmed_dict) if unconfirmed_dict else None
+
+    current_call_id: Optional[int] = memory.get_session_data("current_call_journal_id")
     tool_name = "confirm_identity"
     params = {"date_of_birth": date_of_birth, "postal_code": postal_code}
     result_str = ""
 
     if current_call_id:
-        db.enregistrer_action_agent(
-            id_appel_fk=current_call_id,
-            type_action='TOOL_CALL',
-            nom_outil=tool_name,
-            parametres_outil=params
-        )
+        db.enregistrer_action_agent(id_appel_fk=current_call_id, type_action='TOOL_CALL', nom_outil=tool_name, parametres_outil=params)
     logger.info(f"Outil : {tool_name} appelé pour l'appel ID {current_call_id}")
 
     if not unconfirmed:
@@ -108,8 +108,8 @@ async def confirm_identity(context: RunContext, date_of_birth: str, postal_code:
         try:
             dob = date.fromisoformat(date_of_birth)
             if unconfirmed.date_naissance == dob and unconfirmed.code_postal == postal_code:
-                context.userdata["adherent_context"] = unconfirmed
-                context.userdata["unconfirmed_adherent"] = None
+                memory.set_adherent_context(unconfirmed)
+                memory.set_session_data("unconfirmed_adherent", None)
 
                 if current_call_id:
                     db.enregistrer_contexte_adherent_appel(current_call_id, unconfirmed.id_adherent)
@@ -125,12 +125,7 @@ async def confirm_identity(context: RunContext, date_of_birth: str, postal_code:
             result_str = "Format de date de naissance invalide. Veuillez utiliser le format AAAA-MM-JJ, par exemple 2001-05-28."
 
     if current_call_id:
-        db.enregistrer_action_agent(
-            id_appel_fk=current_call_id,
-            type_action='TOOL_RESULT',
-            nom_outil=tool_name,
-            resultat_outil=result_str
-        )
+        db.enregistrer_action_agent(id_appel_fk=current_call_id, type_action='TOOL_RESULT', nom_outil=tool_name, resultat_outil=result_str)
     return result_str
 
 @function_tool
@@ -138,16 +133,17 @@ async def clear_context(context: RunContext) -> str:
     """
     Efface l'adhérent actuellement sélectionné du contexte de l'assistant. À utiliser si la mauvaise personne a été identifiée ou pour terminer la session.
     """
-    db: Optional[ExtranetDatabaseDriver] = context.userdata.get("db_driver")
-    current_call_id: Optional[int] = context.userdata.get("current_call_journal_id")
+    memory: MemoryManager = context.userdata["memory"]
+    db: Optional[ExtranetDatabaseDriver] = memory.db_driver
+    current_call_id: Optional[int] = memory.get_session_data("current_call_journal_id")
     tool_name = "clear_context"
 
     if current_call_id and db:
         db.enregistrer_action_agent(id_appel_fk=current_call_id, type_action='TOOL_CALL', nom_outil=tool_name, parametres_outil={})
     
     logger.info(f"Outil : {tool_name} appelé pour l'appel ID {current_call_id}")
-    context.userdata["adherent_context"] = None
-    context.userdata["unconfirmed_adherent"] = None
+    memory.set_session_data("adherent_context", None)
+    memory.set_session_data("unconfirmed_adherent", None)
     result_str = "Le contexte a été réinitialisé. Comment puis-je vous aider ?"
 
     if current_call_id and db:
@@ -160,8 +156,9 @@ async def clear_context(context: RunContext) -> str:
 @function_tool
 async def lookup_adherent_by_email(context: RunContext, email: str) -> str:
     """Recherche un adhérent en utilisant son adresse e-mail pour commencer le processus d'identification."""
-    db: ExtranetDatabaseDriver = context.userdata["db_driver"]
-    current_call_id: Optional[int] = context.userdata.get("current_call_journal_id")
+    memory: MemoryManager = context.userdata["memory"]
+    db: ExtranetDatabaseDriver = memory.db_driver
+    current_call_id: Optional[int] = memory.get_session_data("current_call_journal_id")
     tool_name = "lookup_adherent_by_email"
     params = {"email": email}
 
@@ -180,8 +177,9 @@ async def lookup_adherent_by_email(context: RunContext, email: str) -> str:
 @function_tool
 async def lookup_adherent_by_telephone(context: RunContext, telephone: str) -> str:
     """Recherche un adhérent par son numéro de téléphone. Destiné à la recherche automatique au début d'un appel."""
-    db: ExtranetDatabaseDriver = context.userdata["db_driver"]
-    current_call_id: Optional[int] = context.userdata.get("current_call_journal_id")
+    memory: MemoryManager = context.userdata["memory"]
+    db: ExtranetDatabaseDriver = memory.db_driver
+    current_call_id: Optional[int] = memory.get_session_data("current_call_journal_id")
     tool_name = "lookup_adherent_by_telephone"
     params = {"telephone": telephone}
     result_str = ""
@@ -201,8 +199,9 @@ async def lookup_adherent_by_telephone(context: RunContext, telephone: str) -> s
 @function_tool
 async def lookup_adherent_by_fullname(context: RunContext, nom: str, prenom: str) -> str:
     """Recherche un adhérent en utilisant son nom complet pour commencer le processus d'identification."""
-    db: ExtranetDatabaseDriver = context.userdata["db_driver"]
-    current_call_id: Optional[int] = context.userdata.get("current_call_journal_id")
+    memory: MemoryManager = context.userdata["memory"]
+    db: ExtranetDatabaseDriver = memory.db_driver
+    current_call_id: Optional[int] = memory.get_session_data("current_call_journal_id")
     tool_name = "lookup_adherent_by_fullname"
     params = {"nom": nom, "prenom": prenom}
     
@@ -221,7 +220,9 @@ async def lookup_adherent_by_fullname(context: RunContext, nom: str, prenom: str
 @function_tool
 async def get_adherent_details(context: RunContext) -> str:
     """Obtient les détails personnels de l'adhérent actuellement chargé et confirmé dans le contexte de l'assistant."""
-    adherent: Optional[Adherent] = context.userdata.get("adherent_context")
+    memory: MemoryManager = context.userdata["memory"]
+    adherent_dict = memory.get_adherent_context()
+    adherent = Adherent(**adherent_dict) if adherent_dict else None
     if not adherent:
         return "Aucun adhérent n'est actuellement sélectionné et confirmé. Veuillez d'abord rechercher et confirmer l'identité d'un adhérent."
     
@@ -233,12 +234,14 @@ async def get_adherent_details(context: RunContext) -> str:
 async def update_contact_information(context: RunContext, address: Optional[str] = None, postal_code: Optional[str] = None, 
                                      city: Optional[str] = None, phone: Optional[str] = None, email: Optional[str] = None) -> str:
     """Met à jour les informations de contact (adresse, téléphone, e-mail) de l'adhérent actuellement confirmé."""
-    db: ExtranetDatabaseDriver = context.userdata["db_driver"]
-    current_call_id: Optional[int] = context.userdata.get("current_call_journal_id")
+    memory: MemoryManager = context.userdata["memory"]
+    db: ExtranetDatabaseDriver = memory.db_driver
+    current_call_id: Optional[int] = memory.get_session_data("current_call_journal_id")
     tool_name = "update_contact_information"
-    params = {k: v for k, v in locals().items() if k not in ['context', 'db', 'current_call_id', 'tool_name'] and v is not None}
+    params = {k: v for k, v in locals().items() if k not in ['context', 'db', 'current_call_id', 'tool_name', 'memory'] and v is not None}
     
-    adherent: Optional[Adherent] = context.userdata.get("adherent_context")
+    adherent_dict = memory.get_adherent_context()
+    adherent = Adherent(**adherent_dict) if adherent_dict else None
     if not adherent:
         return "Action impossible. L'identité de l'adhérent doit être confirmée avant de pouvoir modifier des informations."
 
@@ -247,13 +250,13 @@ async def update_contact_information(context: RunContext, address: Optional[str]
 
     success = db.update_adherent_contact_info(
         adherent_id=adherent.id_adherent, address=address, code_postal=postal_code,
-        ville=city, telephone=phone, email=email, id_appel_fk_param=current_call_id
+        ville=city, telephone=phone, email=email
     )
 
     if success:
-        updated_adherent = db.get_adherent_by_id(adherent.id_adherent, id_appel_fk_param=current_call_id)
-        if updated_adherent:
-            context.userdata["adherent_context"] = updated_adherent
+        updated_adherent_data = db.get_adherent_by_id(adherent.id_adherent)
+        if updated_adherent_data:
+            memory.set_adherent_context(updated_adherent_data)
         result_str = "Les informations de contact ont été mises à jour avec succès."
     else:
         result_str = "Une erreur s'est produite lors de la mise à jour des informations, ou aucune information n'a été modifiée."
@@ -271,7 +274,8 @@ async def list_available_products(context: RunContext, product_keyword: str) -> 
     Étape 1 : Recherche les noms des produits disponibles correspondant à un mot-clé 
     (ex: "emprunteur", "animaux") et les présente sous forme de liste pour que l'utilisateur choisisse.
     """
-    db: ExtranetDatabaseDriver = context.userdata["db_driver"]
+    memory: MemoryManager = context.userdata["memory"]
+    db: ExtranetDatabaseDriver = memory.db_driver
     tool_name = "list_available_products"
     logger.info(f"Outil KB: '{tool_name}' appelé avec le mot-clé: '{product_keyword}'")
 
@@ -303,7 +307,8 @@ async def get_product_guarantees(context: RunContext, product_name: str) -> str:
     Étape 2 : Récupère et liste les garanties détaillées pour UN SEUL produit spécifique,
     une fois que l'utilisateur a fait son choix.
     """
-    db: ExtranetDatabaseDriver = context.userdata["db_driver"]
+    memory: MemoryManager = context.userdata["memory"]
+    db: ExtranetDatabaseDriver = memory.db_driver
     tool_name = "get_product_guarantees"
     logger.info(f"Outil KB: '{tool_name}' appelé pour le produit: '{product_name}'")
 
@@ -332,8 +337,10 @@ async def get_product_guarantees(context: RunContext, product_name: str) -> str:
 @function_tool
 async def list_adherent_contracts(context: RunContext) -> str:
     """Liste tous les contrats associés à l'adhérent actuellement confirmé dans le contexte."""
-    db: ExtranetDatabaseDriver = context.userdata["db_driver"]
-    adherent: Optional[Adherent] = context.userdata.get("adherent_context")
+    memory: MemoryManager = context.userdata["memory"]
+    db: ExtranetDatabaseDriver = memory.db_driver
+    adherent_dict = memory.get_adherent_context()
+    adherent = Adherent(**adherent_dict) if adherent_dict else None
     if not adherent:
         return "Veuillez d'abord confirmer l'identité d'un adhérent."
 
@@ -350,8 +357,10 @@ async def list_adherent_contracts(context: RunContext) -> str:
 @function_tool
 async def create_claim(context: RunContext, contract_id: int, claim_type: str, description: str, incident_date: str) -> str:
     """Crée un nouveau sinistre pour l'adhérent actuellement confirmé."""
-    db: ExtranetDatabaseDriver = context.userdata["db_driver"]
-    adherent: Optional[Adherent] = context.userdata.get("adherent_context")
+    memory: MemoryManager = context.userdata["memory"]
+    db: ExtranetDatabaseDriver = memory.db_driver
+    adherent_dict = memory.get_adherent_context()
+    adherent = Adherent(**adherent_dict) if adherent_dict else None
     if not adherent:
         return "Impossible de créer un sinistre. L'identité de l'adhérent doit d'abord être confirmée."
 
@@ -373,7 +382,9 @@ async def create_claim(context: RunContext, contract_id: int, claim_type: str, d
 @function_tool
 async def send_confirmation_email(context: RunContext, subject: str, body: str) -> str:
     """Envoie un e-mail de confirmation à l'adhérent actuellement identifié."""
-    adherent: Optional[Adherent] = context.userdata.get("adherent_context")
+    memory: MemoryManager = context.userdata["memory"]
+    adherent_dict = memory.get_adherent_context()
+    adherent = Adherent(**adherent_dict) if adherent_dict else None
     if not adherent or not adherent.email:
         return "Action impossible. L'identité de l'adhérent doit être confirmée et une adresse e-mail doit être enregistrée."
 
@@ -425,7 +436,9 @@ async def request_quote(context: RunContext, product_type: str, user_details: st
 @function_tool
 async def log_issue(context: RunContext, issue_type: str, issue_description: str) -> str:
     """Enregistre un problème complexe pour qu'un conseiller puisse le traiter."""
-    adherent: Optional[Adherent] = context.userdata.get("adherent_context")
+    memory: MemoryManager = context.userdata["memory"]
+    adherent_dict = memory.get_adherent_context()
+    adherent = Adherent(**adherent_dict) if adherent_dict else None
     logger.warning(f"Problème enregistré - Type: {issue_type}, Adhérent: {adherent.id_adherent if adherent else 'N/A'}, Description: {issue_description}")
     return "Je comprends parfaitement votre situation. J'ai enregistré tous les détails de votre problème. Un conseiller spécialisé va examiner votre dossier et vous recontacter dans les plus brefs délais."
 
@@ -434,7 +447,9 @@ async def schedule_callback_with_advisor(context: RunContext, reason: str) -> st
     """
     Planifie un rappel téléphonique avec un conseiller pour un prospect et envoie une notification interne.
     """
-    adherent: Optional[Adherent] = context.userdata.get("adherent_context")
+    memory: MemoryManager = context.userdata["memory"]
+    adherent_dict = memory.get_adherent_context()
+    adherent = Adherent(**adherent_dict) if adherent_dict else None
     prospect_info = "Prospect non identifié"
     if adherent:
         prospect_info = f"Adhérent existant : {adherent.prenom} {adherent.nom} (ID: {adherent.id_adherent})"
@@ -460,9 +475,11 @@ async def expliquer_garantie_specifique(context: RunContext, nom_garantie: str) 
     Fournit les détails (plafond, taux, franchise, conditions) d'une garantie spécifique
     pour le contrat actuellement en contexte. Doit être utilisé APRÈS avoir listé les garanties.
     """
-    db: ExtranetDatabaseDriver = context.userdata["db_driver"]
-    adherent: Optional[Adherent] = context.userdata.get("adherent_context")
-    current_call_id: Optional[int] = context.userdata.get("current_call_journal_id")
+    memory: MemoryManager = context.userdata["memory"]
+    db: ExtranetDatabaseDriver = memory.db_driver
+    adherent_dict = memory.get_adherent_context()
+    adherent = Adherent(**adherent_dict) if adherent_dict else None
+    current_call_id: Optional[int] = memory.get_session_data("current_call_journal_id")
 
     if not adherent:
         return "L'identité de l'adhérent doit être confirmée pour consulter les détails d'une garantie."
@@ -470,13 +487,13 @@ async def expliquer_garantie_specifique(context: RunContext, nom_garantie: str) 
     # On suppose qu'un contrat est déjà dans le contexte ou qu'on peut le récupérer
     # Pour cet exemple, on prend le premier contrat actif. Une version plus avancée
     # pourrait demander de quel contrat il s'agit si l'adhérent en a plusieurs.
-    contrats = db.get_contrats_by_adherent_id(adherent.id_adherent, id_appel_fk_param=current_call_id)
+    contrats = db.get_contrats_by_adherent_id(adherent.id_adherent)
     contrat_actif = next((c for c in contrats if c.statut_contrat == 'Actif'), None)
 
     if not contrat_actif:
         return "Je n'ai pas trouvé de contrat actif pour cet adhérent pour vérifier la garantie."
 
-    details = db.get_specific_guarantee_detail(contrat_actif.id_formule, nom_garantie, id_appel_fk_param=current_call_id)
+    details = db.get_specific_guarantee_detail(contrat_actif.id_formule, nom_garantie)
 
     if not details:
         return f"Je n'ai pas trouvé de détails pour la garantie '{nom_garantie}' dans le contrat actuel."
@@ -494,14 +511,16 @@ async def envoyer_document_adherent(context: RunContext, type_document: str) -> 
     Envoie un document standard (comme les Conditions Générales ou une Notice d'Information)
     par e-mail à l'adhérent actuellement identifié, concernant son contrat actif.
     """
-    db: ExtranetDatabaseDriver = context.userdata["db_driver"]
-    adherent: Optional[Adherent] = context.userdata.get("adherent_context")
-    current_call_id: Optional[int] = context.userdata.get("current_call_journal_id")
+    memory: MemoryManager = context.userdata["memory"]
+    db: ExtranetDatabaseDriver = memory.db_driver
+    adherent_dict = memory.get_adherent_context()
+    adherent = Adherent(**adherent_dict) if adherent_dict else None
+    current_call_id: Optional[int] = memory.get_session_data("current_call_journal_id")
 
     if not adherent or not adherent.email:
         return "Action impossible. L'identité de l'adhérent doit être confirmée et une adresse e-mail doit être enregistrée."
 
-    contrats = db.get_contrats_by_adherent_id(adherent.id_adherent, id_appel_fk_param=current_call_id)
+    contrats = db.get_contrats_by_adherent_id(adherent.id_adherent)
     contrat_actif = next((c for c in contrats if c.statut_contrat == 'Actif'), None)
 
     if not contrat_actif:
@@ -550,8 +569,9 @@ async def enregistrer_feedback_appel(context: RunContext, note: int, commentaire
     Enregistre le feedback de l'utilisateur sur la qualité de l'appel à la fin de la conversation.
     La note doit être un entier entre 1 (très insatisfait) et 5 (très satisfait).
     """
-    db: ExtranetDatabaseDriver = context.userdata["db_driver"]
-    current_call_id: Optional[int] = context.userdata.get("current_call_journal_id")
+    memory: MemoryManager = context.userdata["memory"]
+    db: ExtranetDatabaseDriver = memory.db_driver
+    current_call_id: Optional[int] = memory.get_session_data("current_call_journal_id")
 
     if not current_call_id:
         return "Je ne peux pas enregistrer de feedback car je n'ai pas d'identifiant d'appel."
@@ -565,3 +585,52 @@ async def enregistrer_feedback_appel(context: RunContext, note: int, commentaire
         return "Merci beaucoup pour votre retour, il nous est précieux pour nous améliorer."
     else:
         return "Je suis désolée, une erreur technique est survenue et je n'ai pas pu enregistrer votre retour."
+
+@function_tool
+async def transfer_call(context: RunContext, reason: str, phone_number: Optional[str] = None) -> str:
+    """
+    Initiates a transfer to a human agent. This tool should be used when the user
+    explicitly asks to speak to a person or when the agent cannot handle the request.
+    It sends a notification to a human agent and informs the user.
+    """
+    memory: MemoryManager = context.userdata["memory"]
+    adherent_dict = memory.get_adherent_context()
+    adherent = Adherent(**adherent_dict) if adherent_dict else None
+
+    prospect_info = "Prospect non identifié"
+    contact_number = phone_number
+
+    if adherent:
+        prospect_info = f"Adhérent existant : {adherent.prenom} {adherent.nom} (ID: {adherent.id_adherent})"
+        if not contact_number:
+            contact_number = adherent.telephone
+
+    if not contact_number:
+        return "Je ne peux pas transférer l'appel car je n'ai pas de numéro de téléphone. Veuillez fournir un numéro."
+
+    logger.info(f"Demande de transfert pour '{prospect_info}' au numéro {contact_number} pour le motif : {reason}")
+
+    subject = f"Demande de Transfert Agent IA pour {prospect_info}"
+    body = f"""
+    Une demande de rappel/transfert a été initiée par l'agent IA.
+    <br><br>
+    <strong>Demandeur:</strong> {prospect_info}<br>
+    <strong>Numéro de téléphone à contacter:</strong> {contact_number}<br>
+    <strong>Motif du transfert:</strong> {reason}<br>
+    """
+    await _send_notification_email(subject, body)
+
+    return f"Je comprends. Je notifie un conseiller qui vous rappellera au {contact_number} dans les plus brefs délais. Y a-t-il autre chose que je puisse noter pour le conseiller avant de terminer ?"
+
+@function_tool
+async def hangup_call(context: RunContext) -> str:
+    """
+    Ends the current call. This tool should be used after a task is completed
+    or after a transfer to a human agent has been initiated.
+    """
+    logger.info("Fin de l'appel initiée par l'outil hangup_call.")
+
+    # context is the AgentSession, which has a close() method.
+    await context.close()
+
+    return "Au revoir."
