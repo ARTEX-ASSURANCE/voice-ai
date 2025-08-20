@@ -14,5 +14,5 @@ RUN apt-get update && apt-get install -y pkg-config default-libmysqlclient-dev b
 COPY src/execution/requirements.txt /app/
 RUN pip install --no-cache-dir -r /app/requirements.txt
 
-# Run the execution worker
-CMD ["python", "-m", "src.execution.worker"]
+# Run the execution worker in production mode
+CMD ["python", "-m", "src.execution.worker", "start"]

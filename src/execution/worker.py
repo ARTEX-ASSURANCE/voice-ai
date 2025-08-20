@@ -116,7 +116,7 @@ async def entrypoint(ctx: JobContext):
 
         # 2. Agent and Session setup
         artex_agent = ArtexAgent()
-        session = AgentSession(agent=artex_agent, room=ctx.room)
+        session = AgentSession()
         session.userdata['memory'] = memory_manager
 
         await ctx.connect()
@@ -160,7 +160,7 @@ async def entrypoint(ctx: JobContext):
                 logger.info(f"{call_id_log_prefix} Caller identified.")
 
         # 6. Start the agent loop
-        await session.start()
+        await session.start(agent=artex_agent, room=ctx.room)
         logger.info(f"{call_id_log_prefix} Agent session started.")
         await session.say(initial_message, allow_interruptions=True)
 
