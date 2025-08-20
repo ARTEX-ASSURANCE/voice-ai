@@ -5,3 +5,5 @@ livekit-plugins-deepgram
 langchain-google-genai
 python-dotenv
 redis
+mysqlclient
+sendgrid
