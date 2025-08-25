@@ -1,35 +1,11 @@
-# --- Backend & Agent Core ---
-livekit-agents
-livekit-api
-python-dotenv
-langchain
-langchain-google-genai
-google-cloud-aiplatform # Nécessaire pour les plugins google
-# Note: Choisissez votre plugin TTS/STT. L'agent utilise google et deepgram.
-livekit-plugins-google
-livekit-plugins-deepgram
-livekit-plugins-silero
-# --- Base de données & ORM ---
-mysql-connector-python
-SQLAlchemy
-# --- Frameworks Web & Serveurs ---
-Flask
-Flask-Cors
-gunicorn # Recommandé pour la production (Linux)
-waitress # Recommandé pour la production (Windows)
-uvicorn # Pour le SIP handler (FastAPI)
 fastapi
-# --- Knowledge Base & Documents ---
-unstructured[pdf,docx]
-pypdf
-langchain-community
-faiss-cpu # Ou faiss-gpu si vous avez un GPU
-sentence-transformers
-# --- Communication & Utilitaires ---
+uvicorn
+livekit-agents
+livekit-plugins-google
+livekit-plugins-silero
+livekit-plugins-deepgram
+langchain-google-genai
+python-dotenv
+redis
+mysqlclient
 sendgrid
-# --- Dashboard ---
-streamlit
-pandas
-plotly
-# --- Autres dépendances nécessaires ---
-protobuf # Souvent requis par les autres librairies
