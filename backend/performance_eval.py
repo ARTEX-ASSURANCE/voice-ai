@@ -5,7 +5,6 @@ import os
 import json
 import time # Import du module time pour la pause
 from dotenv import load_dotenv
-import mysql.connector
 from db_driver import ExtranetDatabaseDriver
 from error_logger import log_system_error, set_db_connection_params
 from prompts import PERFORMANCE_EVALUATION_PROMPT
@@ -39,7 +38,8 @@ def evaluate_and_summarize_call(id_appel: int, db: ExtranetDatabaseDriver, llm: 
             # --- Amélioration du parsing JSON ---
             try:
                 # Gère le cas où le LLM retourne le JSON dans un bloc de code
-                response_content = response.content.strip()
+                response_content_raw = response.content
+                response_content = response_content_raw.strip() if isinstance(response_content_raw, str) else json.dumps(response_content_raw)
                 if response_content.startswith("```json"):
                     response_content = response_content[7:-3].strip()
                 

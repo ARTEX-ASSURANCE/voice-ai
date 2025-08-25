@@ -212,7 +212,8 @@ class ExtranetDatabaseDriver:
         }
         updates = {k: v for k, v in fields_to_update.items() if v is not None}
         
-        if not updates: return False
+        if not updates:
+            return False
 
         description_tentative = f"Tentative MAJ contact pour adhérent ID: {adherent_id}. Champs: {', '.join(updates.keys())}"
         self._log_db_interaction("UPDATE_ATTEMPT", "adherents", description_tentative, id_appel_fk_param, adherent_id)
@@ -551,7 +552,7 @@ class ExtranetDatabaseDriver:
         if exact_match:
             description = f"Recherche des garanties pour le produit exact: '{product_keyword}'"
             where_clause = "p.nom_produit = %s"
-            params = (product_keyword,)
+            params: tuple[str, ...] = (product_keyword,)
         else:
             description = f"Recherche de produits correspondant à: '{product_keyword}'"
             where_clause = "p.nom_produit LIKE %s OR p.categorie LIKE %s"

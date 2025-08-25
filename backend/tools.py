@@ -3,9 +3,7 @@
 import logging
 from typing import Optional, List
 from datetime import date
-from decimal import Decimal
 import os
-import json
 
 # Imports pour les services externes (e-mail, etc.)
 from sendgrid import SendGridAPIClient
@@ -14,7 +12,7 @@ from sendgrid.helpers.mail import Mail
 # Imports pour la logique de l'agent
 from livekit.agents import function_tool, RunContext
 from db_driver import ExtranetDatabaseDriver, Adherent
-from error_logger import log_system_error
+ 
 
 logger = logging.getLogger("artex_agent.tools")
 

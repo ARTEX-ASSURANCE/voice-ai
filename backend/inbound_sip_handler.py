@@ -64,7 +64,8 @@ async def handle_inbound_sip(request: Request):
         room_name = f"sip-inbound-{call_id}"
         
         # 3. Create the room on the LiveKit server.
-        await lk_api.room.create_room(name=room_name, empty_timeout=60)
+        # The SDK signature may not accept keyword args across versions; pass positionally for compatibility.
+        await lk_api.room.create_room(room_name)  # type: ignore[arg-type]
         logger.info(f"Created LiveKit room: '{room_name}'")
 
         # 4. Define the participant's details.

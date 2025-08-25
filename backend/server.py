@@ -3,11 +3,11 @@ from flask import Flask, request
 from dotenv import load_dotenv
 from flask_cors import CORS
 from livekit.api import LiveKitAPI, AccessToken, VideoGrants, ListRoomsRequest # Importations mises à jour
+from dashboard_api import dashboard_bp
 import uuid
-import os # Assurez-vous que os est importé pour getenv
 
 # Importer le logger d'erreurs et sa fonction de configuration
-from error_logger import set_db_connection_params, log_system_error
+from error_logger import set_db_connection_params
 
 load_dotenv()
 
@@ -35,9 +35,6 @@ except Exception as e:
 
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}})
-
-# Enregistrer le blueprint du tableau de bord
-from dashboard_api import dashboard_bp
 app.register_blueprint(dashboard_bp)
 
 async def generate_room_name():
