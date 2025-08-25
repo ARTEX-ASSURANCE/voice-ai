@@ -15,7 +15,7 @@ from api import ArtexAgent
 from db_driver import ExtranetDatabaseDriver
 from prompts import WELCOME_MESSAGE
 from tools import lookup_adherent_by_telephone
-from error_logger import log_system_error, set_db_connection_params
+from error_logger import set_db_connection_params
 
 # --- Configuration du Logging (Inchangé) ---
 logging.basicConfig(level=logging.WARNING, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -89,6 +89,7 @@ async def entrypoint(ctx: JobContext):
         
         initial_userdata = artex_agent.get_initial_userdata()
         initial_userdata["current_call_journal_id"] = current_call_journal_id
+        assert session is not None
         session.userdata = initial_userdata
 
         initial_message = WELCOME_MESSAGE
@@ -98,6 +99,7 @@ async def entrypoint(ctx: JobContext):
                 initial_message = lookup_result
                 logger.info(f"{call_id_log_prefix} Appelant identifié.")
 
+        assert session is not None
         await session.start(artex_agent, room=ctx.room)
         logger.info(f"{call_id_log_prefix} Session de l'agent démarrée.")
         await session.say(initial_message, allow_interruptions=True)

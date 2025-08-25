@@ -41,7 +41,7 @@ def process_document_elements_final(docs_path):
                                 if df_list:
                                     df = df_list[0]
                                     if not df.empty:
-                                        print(f"    -> Tableau détecté, conversion via HTML réussie.")
+                                        print("    -> Tableau détecté, conversion via HTML réussie.")
                                         for _, row in df.iterrows():
                                             row_text = ", ".join([f"{col}: {val}" for col, val in row.dropna().items()])
                                             all_texts.append(f"Information d'un tableau : {row_text}.")
@@ -52,7 +52,7 @@ def process_document_elements_final(docs_path):
                         
                         # Stratégie de repli : si le tableau n'a pas pu être parsé, on prend son texte brut.
                         if not table_parsed:
-                            print(f"    -> Avertissement : Impossible de parser la structure du tableau. Utilisation du texte brut de l'élément.")
+                            print("    -> Avertissement : Impossible de parser la structure du tableau. Utilisation du texte brut de l'élément.")
                             if element.text:
                                 all_texts.append(f"Texte brut d'un tableau : {element.text}")
                     else:

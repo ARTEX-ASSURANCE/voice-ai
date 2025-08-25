@@ -1,7 +1,6 @@
 from flask import Blueprint, jsonify, request, current_app
 import mysql.connector # For type hinting and error handling
-from typing import Optional
-import json # For handling JSON in parameters if needed, and for response
+ 
 import datetime
 
 # Assuming ExtranetDatabaseDriver is accessible.
