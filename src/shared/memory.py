@@ -2,10 +2,7 @@ import redis
 import json
 from typing import Any, Optional
 
-# The Adherent and ExtranetDatabaseDriver classes will be imported once
-# the project structure is more stable and imports can be resolved.
-# For now, we use comments and avoid strict type hinting for them.
-# from ..data_access.driver import Adherent, ExtranetDatabaseDriver
+from src.data_access.driver import Adherent, ExtranetDatabaseDriver
 
 class MemoryManager:
     """
@@ -47,22 +44,36 @@ class MemoryManager:
         all_data = self.redis_client.hgetall(self.session_key)
         return {k.decode(): json.loads(v) for k, v in all_data.items()}
 
-    def set_adherent_context(self, adherent: Any): # Type hint will be Adherent
+    def set_adherent_context(self, adherent: Adherent):
         """A specific helper to store the adherent context."""
-        from dataclasses import asdict, is_dataclass
-        if is_dataclass(adherent):
-            self.set_session_data("adherent_context", asdict(adherent))
+        from dataclasses import asdict
+        self.set_session_data("adherent_context", asdict(adherent))
+
+
+    def get_adherent_context(self) -> Optional[Adherent]:
+        """
+        A specific helper to retrieve the adherent context.
+        It deserializes the data from a dictionary back into an Adherent dataclass.
+        """
+        adherent_dict = self.get_session_data("adherent_context")
+        if adherent_dict:
+            return Adherent(**adherent_dict)
+        return None
+
+    def set_unconfirmed_adherent(self, adherent: Optional[Adherent]):
+        """A specific helper to store the unconfirmed adherent context."""
+        from dataclasses import asdict
+        if adherent:
+            self.set_session_data("unconfirmed_adherent", asdict(adherent))
         else:
-            # Handle cases where it might be a dict already
-            self.set_session_data("adherent_context", adherent)
+            self.set_session_data("unconfirmed_adherent", None)
 
-
-    def get_adherent_context(self) -> Optional[dict]: # -> Optional[Adherent]
-        """
-        A specific helper to retrieve the adherent context as a dictionary.
-        The caller is responsible for converting it back to a dataclass.
-        """
-        return self.get_session_data("adherent_context")
+    def get_unconfirmed_adherent(self) -> Optional[Adherent]:
+        """A specific helper to retrieve the unconfirmed adherent context."""
+        adherent_dict = self.get_session_data("unconfirmed_adherent")
+        if adherent_dict:
+            return Adherent(**adherent_dict)
+        return None
 
     # --- Turn Memory (In-memory) ---
 

@@ -59,18 +59,18 @@ def _handle_lookup_result(context: RunContext, result: Optional[Adherent] | List
     """
     memory: MemoryManager = context.userdata["memory"]
     if not result:
-        memory.set_session_data("unconfirmed_adherent", None)
+        memory.set_unconfirmed_adherent(None)
         return "Désolé, aucun adhérent correspondant n'a été trouvé avec ces informations."
 
     if isinstance(result, list):
         if len(result) > 1:
             return "J'ai trouvé plusieurs adhérents correspondants. Pour vous identifier précisément, pouvez-vous me donner votre adresse e-mail ou votre numéro de contrat ?"
         if not result:
-            memory.set_session_data("unconfirmed_adherent", None)
+            memory.set_unconfirmed_adherent(None)
             return "Désolé, aucun adhérent correspondant n'a été trouvé."
         result = result[0]
 
-    memory.set_session_data("unconfirmed_adherent", result)
+    memory.set_unconfirmed_adherent(result)
     logger.info(f"Adhérent non confirmé trouvé via {source}: {result.prenom} {result.nom} (ID: {result.id_adherent})")
     
     if source == "phone":
@@ -90,8 +90,7 @@ async def confirm_identity(context: RunContext, date_of_birth: str, postal_code:
     """
     memory: MemoryManager = context.userdata["memory"]
     db: ExtranetDatabaseDriver = memory.db_driver
-    unconfirmed_dict = memory.get_session_data("unconfirmed_adherent")
-    unconfirmed = Adherent(**unconfirmed_dict) if unconfirmed_dict else None
+    unconfirmed = memory.get_unconfirmed_adherent()
 
     current_call_id: Optional[int] = memory.get_session_data("current_call_journal_id")
     tool_name = "confirm_identity"
@@ -142,8 +141,8 @@ async def clear_context(context: RunContext) -> str:
         db.enregistrer_action_agent(id_appel_fk=current_call_id, type_action='TOOL_CALL', nom_outil=tool_name, parametres_outil={})
     
     logger.info(f"Outil : {tool_name} appelé pour l'appel ID {current_call_id}")
-    memory.set_session_data("adherent_context", None)
-    memory.set_session_data("unconfirmed_adherent", None)
+    memory.set_adherent_context(None)
+    memory.set_unconfirmed_adherent(None)
     result_str = "Le contexte a été réinitialisé. Comment puis-je vous aider ?"
 
     if current_call_id and db:
@@ -221,8 +220,7 @@ async def lookup_adherent_by_fullname(context: RunContext, nom: str, prenom: str
 async def get_adherent_details(context: RunContext) -> str:
     """Obtient les détails personnels de l'adhérent actuellement chargé et confirmé dans le contexte de l'assistant."""
     memory: MemoryManager = context.userdata["memory"]
-    adherent_dict = memory.get_adherent_context()
-    adherent = Adherent(**adherent_dict) if adherent_dict else None
+    adherent = memory.get_adherent_context()
     if not adherent:
         return "Aucun adhérent n'est actuellement sélectionné et confirmé. Veuillez d'abord rechercher et confirmer l'identité d'un adhérent."
     
@@ -240,8 +238,7 @@ async def update_contact_information(context: RunContext, address: Optional[str]
     tool_name = "update_contact_information"
     params = {k: v for k, v in locals().items() if k not in ['context', 'db', 'current_call_id', 'tool_name', 'memory'] and v is not None}
     
-    adherent_dict = memory.get_adherent_context()
-    adherent = Adherent(**adherent_dict) if adherent_dict else None
+    adherent = memory.get_adherent_context()
     if not adherent:
         return "Action impossible. L'identité de l'adhérent doit être confirmée avant de pouvoir modifier des informations."
 
@@ -339,8 +336,7 @@ async def list_adherent_contracts(context: RunContext) -> str:
     """Liste tous les contrats associés à l'adhérent actuellement confirmé dans le contexte."""
     memory: MemoryManager = context.userdata["memory"]
     db: ExtranetDatabaseDriver = memory.db_driver
-    adherent_dict = memory.get_adherent_context()
-    adherent = Adherent(**adherent_dict) if adherent_dict else None
+    adherent = memory.get_adherent_context()
     if not adherent:
         return "Veuillez d'abord confirmer l'identité d'un adhérent."
 
@@ -359,8 +355,7 @@ async def create_claim(context: RunContext, contract_id: int, claim_type: str, d
     """Crée un nouveau sinistre pour l'adhérent actuellement confirmé."""
     memory: MemoryManager = context.userdata["memory"]
     db: ExtranetDatabaseDriver = memory.db_driver
-    adherent_dict = memory.get_adherent_context()
-    adherent = Adherent(**adherent_dict) if adherent_dict else None
+    adherent = memory.get_adherent_context()
     if not adherent:
         return "Impossible de créer un sinistre. L'identité de l'adhérent doit d'abord être confirmée."
 
@@ -383,8 +378,7 @@ async def create_claim(context: RunContext, contract_id: int, claim_type: str, d
 async def send_confirmation_email(context: RunContext, subject: str, body: str) -> str:
     """Envoie un e-mail de confirmation à l'adhérent actuellement identifié."""
     memory: MemoryManager = context.userdata["memory"]
-    adherent_dict = memory.get_adherent_context()
-    adherent = Adherent(**adherent_dict) if adherent_dict else None
+    adherent = memory.get_adherent_context()
     if not adherent or not adherent.email:
         return "Action impossible. L'identité de l'adhérent doit être confirmée et une adresse e-mail doit être enregistrée."
 
@@ -437,8 +431,7 @@ async def request_quote(context: RunContext, product_type: str, user_details: st
 async def log_issue(context: RunContext, issue_type: str, issue_description: str) -> str:
     """Enregistre un problème complexe pour qu'un conseiller puisse le traiter."""
     memory: MemoryManager = context.userdata["memory"]
-    adherent_dict = memory.get_adherent_context()
-    adherent = Adherent(**adherent_dict) if adherent_dict else None
+    adherent = memory.get_adherent_context()
     logger.warning(f"Problème enregistré - Type: {issue_type}, Adhérent: {adherent.id_adherent if adherent else 'N/A'}, Description: {issue_description}")
     return "Je comprends parfaitement votre situation. J'ai enregistré tous les détails de votre problème. Un conseiller spécialisé va examiner votre dossier et vous recontacter dans les plus brefs délais."
 
@@ -448,8 +441,7 @@ async def schedule_callback_with_advisor(context: RunContext, reason: str) -> st
     Planifie un rappel téléphonique avec un conseiller pour un prospect et envoie une notification interne.
     """
     memory: MemoryManager = context.userdata["memory"]
-    adherent_dict = memory.get_adherent_context()
-    adherent = Adherent(**adherent_dict) if adherent_dict else None
+    adherent = memory.get_adherent_context()
     prospect_info = "Prospect non identifié"
     if adherent:
         prospect_info = f"Adhérent existant : {adherent.prenom} {adherent.nom} (ID: {adherent.id_adherent})"
@@ -477,8 +469,7 @@ async def expliquer_garantie_specifique(context: RunContext, nom_garantie: str) 
     """
     memory: MemoryManager = context.userdata["memory"]
     db: ExtranetDatabaseDriver = memory.db_driver
-    adherent_dict = memory.get_adherent_context()
-    adherent = Adherent(**adherent_dict) if adherent_dict else None
+    adherent = memory.get_adherent_context()
     current_call_id: Optional[int] = memory.get_session_data("current_call_journal_id")
 
     if not adherent:
@@ -513,8 +504,7 @@ async def envoyer_document_adherent(context: RunContext, type_document: str) -> 
     """
     memory: MemoryManager = context.userdata["memory"]
     db: ExtranetDatabaseDriver = memory.db_driver
-    adherent_dict = memory.get_adherent_context()
-    adherent = Adherent(**adherent_dict) if adherent_dict else None
+    adherent = memory.get_adherent_context()
     current_call_id: Optional[int] = memory.get_session_data("current_call_journal_id")
 
     if not adherent or not adherent.email:
@@ -594,8 +584,7 @@ async def transfer_call(context: RunContext, reason: str, phone_number: Optional
     It sends a notification to a human agent and informs the user.
     """
     memory: MemoryManager = context.userdata["memory"]
-    adherent_dict = memory.get_adherent_context()
-    adherent = Adherent(**adherent_dict) if adherent_dict else None
+    adherent = memory.get_adherent_context()
 
     prospect_info = "Prospect non identifié"
     contact_number = phone_number
